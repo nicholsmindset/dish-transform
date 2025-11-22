@@ -1,12 +1,308 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState, useCallback } from "react";
+import { useToast } from "@/hooks/use-toast";
+import Hero from "@/components/Hero";
+import PhotoUploadSection from "@/components/PhotoUploadSection";
+import LoadingState from "@/components/LoadingState";
+import PhotoComparisonGrid from "@/components/PhotoComparisonGrid";
+import PhotoLightbox from "@/components/PhotoLightbox";
+import ResultsActions from "@/components/ResultsActions";
+import { Button } from "@/components/ui/button";
+import JSZip from "jszip";
+
+type AppState = "hero" | "upload" | "generating" | "results";
+
+interface EnhancedPhoto {
+  name: string;
+  imageUrl: string;
+  style: string;
+}
 
 const Index = () => {
+  const { toast } = useToast();
+  const [appState, setAppState] = useState<AppState>("hero");
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [originalImageUrl, setOriginalImageUrl] = useState<string | null>(null);
+  const [enhancedPhotos, setEnhancedPhotos] = useState<EnhancedPhoto[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [currentPhoto, setCurrentPhoto] = useState("");
+  const [completedCount, setCompletedCount] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxPhotoIndex, setLightboxPhotoIndex] = useState(0);
+
+  const handleGetStarted = useCallback(() => {
+    setAppState("upload");
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 100);
+  }, []);
+
+  const handleImageSelect = useCallback((file: File) => {
+    setSelectedImage(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      setImagePreview(result);
+      setOriginalImageUrl(result);
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const handleClearImage = useCallback(() => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    setOriginalImageUrl(null);
+  }, []);
+
+  const handleGenerate = useCallback(async () => {
+    if (!originalImageUrl) {
+      toast({
+        title: "No image selected",
+        description: "Please select an image first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGenerating(true);
+    setAppState("generating");
+    setCurrentPhoto("Analyzing your photo...");
+    setCompletedCount(0);
+
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/enhance-food-photo`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            imageUrl: originalImageUrl,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to enhance photo");
+      }
+
+      const data = await response.json();
+
+      if (!data.photos || data.photos.length === 0) {
+        throw new Error("No enhanced photos were generated");
+      }
+
+      setEnhancedPhotos(data.photos);
+      setAppState("results");
+      setIsGenerating(false);
+
+      toast({
+        title: "Success!",
+        description: `Generated ${data.photos.length} professional versions of your food photo`,
+      });
+    } catch (error) {
+      console.error("Error enhancing photo:", error);
+      toast({
+        title: "Enhancement failed",
+        description: error instanceof Error ? error.message : "Failed to enhance photo. Please try again.",
+        variant: "destructive",
+      });
+      setAppState("upload");
+      setIsGenerating(false);
+    }
+  }, [originalImageUrl, toast]);
+
+  const handleDownloadSingle = useCallback(async (imageUrl: string, name: string) => {
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${name.toLowerCase().replace(/\s+/g, "-")}.png`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: "Downloaded",
+        description: `${name} downloaded successfully`,
+      });
+    } catch (error) {
+      console.error("Download error:", error);
+      toast({
+        title: "Download failed",
+        description: "Failed to download image",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
+  const handleDownloadAll = useCallback(async () => {
+    try {
+      const zip = new JSZip();
+
+      for (const photo of enhancedPhotos) {
+        const response = await fetch(photo.imageUrl);
+        const blob = await response.blob();
+        zip.file(`${photo.style}.png`, blob);
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = window.URL.createObjectURL(content);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "menu-visuals-enhanced.zip";
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: "Downloaded",
+        description: "All 3 enhanced photos downloaded as ZIP",
+      });
+    } catch (error) {
+      console.error("Download error:", error);
+      toast({
+        title: "Download failed",
+        description: "Failed to create ZIP file",
+        variant: "destructive",
+      });
+    }
+  }, [enhancedPhotos, toast]);
+
+  const handleEnhanceAnother = useCallback(() => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    setOriginalImageUrl(null);
+    setEnhancedPhotos([]);
+    setAppState("upload");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
+  const handleOpenLightbox = useCallback((index: number) => {
+    setLightboxPhotoIndex(index);
+    setLightboxOpen(true);
+  }, []);
+
+  const handleCloseLightbox = useCallback(() => {
+    setLightboxOpen(false);
+  }, []);
+
+  const handleNavigatePhoto = useCallback((direction: "prev" | "next") => {
+    setLightboxPhotoIndex((prev) => {
+      if (direction === "prev") {
+        return Math.max(0, prev - 1);
+      } else {
+        return Math.min(enhancedPhotos.length - 1, prev + 1);
+      }
+    });
+  }, [enhancedPhotos.length]);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
+    <div className="min-h-screen bg-background">
+      {appState === "hero" && <Hero onGetStarted={handleGetStarted} />}
+
+      {appState === "upload" && (
+        <div className="container mx-auto px-4 py-20">
+          <div className="text-center mb-12">
+            <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
+              Upload Your Food Photo
+            </h2>
+            <p className="text-xl text-muted-foreground">
+              We'll transform it into 3 professional versions
+            </p>
+          </div>
+
+          <PhotoUploadSection
+            onImageSelect={handleImageSelect}
+            selectedImage={selectedImage}
+            imagePreview={imagePreview}
+            onClearImage={handleClearImage}
+          />
+
+          {selectedImage && (
+            <div className="flex justify-center mt-8">
+              <Button
+                onClick={handleGenerate}
+                size="lg"
+                className="bg-gradient-hero text-primary-foreground hover:opacity-90 shadow-food text-lg px-12 py-6 rounded-full"
+                disabled={isGenerating}
+              >
+                Generate 3 Pro Versions
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {appState === "generating" && (
+        <LoadingState currentPhoto={currentPhoto} completedCount={completedCount} />
+      )}
+
+      {appState === "results" && originalImageUrl && (
+        <>
+          <PhotoComparisonGrid
+            originalImage={originalImageUrl}
+            enhancedPhotos={enhancedPhotos}
+            onDownload={handleDownloadSingle}
+            onOpenLightbox={handleOpenLightbox}
+          />
+          <ResultsActions
+            photos={enhancedPhotos}
+            onDownloadAll={handleDownloadAll}
+            onEnhanceAnother={handleEnhanceAnother}
+          />
+        </>
+      )}
+
+      {lightboxOpen && enhancedPhotos[lightboxPhotoIndex] && originalImageUrl && (
+        <PhotoLightbox
+          open={lightboxOpen}
+          onClose={handleCloseLightbox}
+          originalImage={originalImageUrl}
+          enhancedImage={enhancedPhotos[lightboxPhotoIndex].imageUrl}
+          settingName={enhancedPhotos[lightboxPhotoIndex].name}
+          onNavigate={handleNavigatePhoto}
+          onDownload={handleDownloadSingle}
+          canNavigatePrev={lightboxPhotoIndex > 0}
+          canNavigateNext={lightboxPhotoIndex < enhancedPhotos.length - 1}
+        />
+      )}
+
+      {/* Footer */}
+      <footer className="bg-card/50 backdrop-blur-sm border-t border-border py-12 mt-20">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto text-center">
+            <h3 className="text-2xl font-bold text-foreground mb-6">Pricing</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-card rounded-xl p-6 border border-border shadow-warm">
+                <h4 className="font-semibold text-lg mb-2">Small Restaurant</h4>
+                <p className="text-3xl font-bold text-primary mb-2">$79/mo</p>
+                <p className="text-muted-foreground text-sm">30 dishes (90 photos)</p>
+              </div>
+              <div className="bg-gradient-hero rounded-xl p-6 border-2 border-primary shadow-food">
+                <h4 className="font-semibold text-lg mb-2 text-primary-foreground">Multi-Location</h4>
+                <p className="text-3xl font-bold text-primary-foreground mb-2">$199/mo</p>
+                <p className="text-primary-foreground/80 text-sm">100 dishes (300 photos)</p>
+              </div>
+              <div className="bg-card rounded-xl p-6 border border-border shadow-warm">
+                <h4 className="font-semibold text-lg mb-2">Enterprise Chain</h4>
+                <p className="text-3xl font-bold text-accent mb-2">$499/mo</p>
+                <p className="text-muted-foreground text-sm">Unlimited + API access</p>
+              </div>
+            </div>
+            <p className="text-muted-foreground">
+              Built with Lovable + fal.ai
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };
