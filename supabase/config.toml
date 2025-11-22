@@ -1,1 +1,4 @@
 project_id = "tnxotlaiubnhgtelhsca"
+
+[functions.enhance-food-photo]
+verify_jwt = false
