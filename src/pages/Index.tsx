@@ -8,6 +8,8 @@ import LoadingState from "@/components/LoadingState";
 import PhotoComparisonGrid from "@/components/PhotoComparisonGrid";
 import PhotoLightbox from "@/components/PhotoLightbox";
 import ResultsActions from "@/components/ResultsActions";
+import StyleSelector from "@/components/StyleSelector";
+import RegenerateOptions from "@/components/RegenerateOptions";
 import { Button } from "@/components/ui/button";
 import { User } from "@supabase/supabase-js";
 import { LogOut } from "lucide-react";
@@ -35,6 +37,8 @@ const Index = () => {
   const [completedCount, setCompletedCount] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxPhotoIndex, setLightboxPhotoIndex] = useState(0);
+  const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
+  const [customPrompt, setCustomPrompt] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -121,6 +125,8 @@ const Index = () => {
             imageUrl: originalImageUrl,
             userId: user?.id,
             photoLibraryId,
+            selectedStyles: selectedStyles.length > 0 ? selectedStyles : undefined,
+            customPrompt: customPrompt.trim() || undefined,
           }),
         }
       );
@@ -224,9 +230,86 @@ const Index = () => {
     setImagePreview(null);
     setOriginalImageUrl(null);
     setEnhancedPhotos([]);
+    setSelectedStyles([]);
+    setCustomPrompt("");
     setAppState("upload");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
+
+  const handleRegenerateStyles = useCallback(async (stylesToRegenerate: string[]) => {
+    if (!originalImageUrl) return;
+
+    setIsGenerating(true);
+    setAppState("generating");
+    setCurrentPhoto("Regenerating selected styles...");
+    setCompletedCount(0);
+
+    try {
+      let photoLibraryId = null;
+
+      if (user) {
+        const { data: photoData } = await supabase
+          .from('photo_library')
+          .select('id')
+          .eq('original_image_url', originalImageUrl)
+          .eq('user_id', user.id)
+          .single();
+        
+        photoLibraryId = photoData?.id;
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/enhance-food-photo`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            imageUrl: originalImageUrl,
+            userId: user?.id,
+            photoLibraryId,
+            selectedStyles: stylesToRegenerate,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to regenerate styles");
+      }
+
+      const data = await response.json();
+
+      // Update existing photos with regenerated ones
+      const updatedPhotos = [...enhancedPhotos];
+      data.photos.forEach((newPhoto: EnhancedPhoto) => {
+        const index = updatedPhotos.findIndex(p => p.name === newPhoto.name);
+        if (index !== -1) {
+          updatedPhotos[index] = newPhoto;
+        }
+      });
+
+      setEnhancedPhotos(updatedPhotos);
+      setAppState("results");
+      setIsGenerating(false);
+
+      toast({
+        title: "Regenerated!",
+        description: `Successfully regenerated ${data.photos.length} style(s)`,
+      });
+    } catch (error) {
+      console.error("Error regenerating:", error);
+      toast({
+        title: "Regeneration failed",
+        description: error instanceof Error ? error.message : "Failed to regenerate. Please try again.",
+        variant: "destructive",
+      });
+      setAppState("results");
+      setIsGenerating(false);
+    }
+  }, [originalImageUrl, user, enhancedPhotos, toast]);
 
   const handleOpenLightbox = useCallback((index: number) => {
     setLightboxPhotoIndex(index);
@@ -309,15 +392,27 @@ const Index = () => {
           />
 
           {selectedImage && (
-            <div className="flex justify-center mt-8">
-              <Button
-                onClick={handleGenerate}
-                size="lg"
-                className="bg-gradient-hero text-primary-foreground hover:opacity-90 shadow-food text-lg px-12 py-6 rounded-full"
-                disabled={isGenerating}
-              >
-                Generate 3 Pro Versions
-              </Button>
+            <div className="max-w-2xl mx-auto mt-8 space-y-6">
+              <StyleSelector
+                selectedStyles={selectedStyles}
+                onStylesChange={setSelectedStyles}
+                customPrompt={customPrompt}
+                onCustomPromptChange={setCustomPrompt}
+              />
+              
+              <div className="flex justify-center">
+                <Button
+                  onClick={handleGenerate}
+                  size="lg"
+                  className="bg-gradient-hero text-primary-foreground hover:opacity-90 shadow-food text-lg px-12 py-6 rounded-full"
+                  disabled={isGenerating}
+                >
+                  {selectedStyles.length === 0 && !customPrompt.trim() 
+                    ? "Generate 3 Pro Versions"
+                    : `Generate ${selectedStyles.length + (customPrompt.trim() ? 1 : 0)} Version${selectedStyles.length + (customPrompt.trim() ? 1 : 0) > 1 ? 's' : ''}`
+                  }
+                </Button>
+              </div>
             </div>
           )}
         </div>
@@ -329,6 +424,14 @@ const Index = () => {
 
       {appState === "results" && originalImageUrl && (
         <>
+          <div className="container mx-auto px-4 py-8">
+            <RegenerateOptions
+              photos={enhancedPhotos}
+              originalImageUrl={originalImageUrl}
+              onRegenerate={handleRegenerateStyles}
+              isGenerating={isGenerating}
+            />
+          </div>
           <PhotoComparisonGrid
             originalImage={originalImageUrl}
             enhancedPhotos={enhancedPhotos}

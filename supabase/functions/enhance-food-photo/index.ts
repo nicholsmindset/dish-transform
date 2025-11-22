@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { imageUrl, userId, photoLibraryId } = await req.json();
+    const { imageUrl, userId, photoLibraryId, selectedStyles, customPrompt } = await req.json();
 
     if (!imageUrl) {
       return new Response(
@@ -43,7 +43,7 @@ serve(async (req) => {
     console.log("Enhancing food photo with 3 professional variations");
 
     // 3 variations with different settings and presentations
-    const variations = [
+    const allVariations = [
       {
         name: "Clean White Background",
         prompt: `Transform this food photo into professional restaurant photography. Place the dish on a clean white surface with studio lighting. Make sure all plates, bowls, utensils, and surfaces are pristine and spotless - remove any stains, crumbs, or mess. The food should look exactly the same but with professional presentation: sharp focus, perfect lighting, appetizing colors, high-end restaurant quality. Maintain the exact dish composition and ingredients. Remove any amateur elements (phones, hands, messy backgrounds). Professional menu photography style. 4K quality, shallow depth of field.`,
@@ -57,6 +57,19 @@ serve(async (req) => {
         prompt: `Transform this food photo into professional restaurant photography. Place the dish against a dark, moody background with dramatic side lighting. Ensure plates, bowls, and any utensils are immaculately clean and polished. The food should look exactly the same but more sophisticated: rich colors, artistic shadows, fine dining aesthetic. Maintain the exact dish composition and ingredients. Professional editorial food photography with cinematic quality. 4K quality, elegant and upscale.`,
       },
     ];
+
+    // Add custom prompt variation if provided
+    if (customPrompt) {
+      allVariations.push({
+        name: "Custom Style",
+        prompt: `Transform this food photo into professional restaurant photography. ${customPrompt}. Make sure all plates, bowls, utensils, and surfaces are pristine and spotless. The food should look exactly the same but with professional presentation. Maintain the exact dish composition and ingredients. Professional menu photography style. 4K quality.`,
+      });
+    }
+
+    // Filter variations based on selectedStyles or use all
+    const variations = selectedStyles && selectedStyles.length > 0
+      ? allVariations.filter(v => selectedStyles.includes(v.name))
+      : allVariations;
 
     const results = [];
 
