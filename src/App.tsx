@@ -5,6 +5,12 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
+import Auth from "./pages/Auth";
+import Dashboard from "./pages/Dashboard";
+import PhotoDetail from "./pages/PhotoDetail";
+import Settings from "./pages/Settings";
+import MenuBuilder from "./pages/MenuBuilder";
+import BatchUploadPage from "./pages/BatchUploadPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -17,6 +23,12 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/photo/:id" element={<PhotoDetail />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/menu" element={<MenuBuilder />} />
+          <Route path="/batch" element={<BatchUploadPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { fal } from "https://esm.sh/@fal-ai/client@1.1.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { imageUrl } = await req.json();
+    const { imageUrl, userId, photoLibraryId } = await req.json();
 
     if (!imageUrl) {
       return new Response(
@@ -22,9 +23,18 @@ serve(async (req) => {
     }
 
     const FAL_KEY = Deno.env.get("FAL_KEY");
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
     if (!FAL_KEY) {
       throw new Error("FAL_KEY not configured");
     }
+
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("Supabase credentials not configured");
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     fal.config({
       credentials: FAL_KEY,
@@ -81,9 +91,55 @@ serve(async (req) => {
         continue;
       }
 
+      // Download the image from fal.ai
+      console.log(`Downloading ${variation.name} from fal.ai...`);
+      const imageResponse = await fetch(imageResult.url);
+      const imageBlob = await imageResponse.blob();
+      const imageArrayBuffer = await imageBlob.arrayBuffer();
+      const imageBuffer = new Uint8Array(imageArrayBuffer);
+
+      // Upload to Supabase Storage
+      const fileName = `${userId || 'anonymous'}/${Date.now()}-${variation.name.toLowerCase().replace(/\s+/g, '-')}.png`;
+      console.log(`Uploading ${variation.name} to Supabase Storage: ${fileName}`);
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('enhanced-photos')
+        .upload(fileName, imageBuffer, {
+          contentType: 'image/png',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error(`Failed to upload ${variation.name}:`, uploadError);
+        continue;
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('enhanced-photos')
+        .getPublicUrl(fileName);
+
+      const permanentUrl = urlData.publicUrl;
+      console.log(`${variation.name} stored at: ${permanentUrl}`);
+
+      // If photoLibraryId is provided, save to database
+      if (photoLibraryId) {
+        const { error: dbError } = await supabase
+          .from('enhanced_photos')
+          .insert({
+            photo_library_id: photoLibraryId,
+            style_name: variation.name,
+            image_url: permanentUrl
+          });
+
+        if (dbError) {
+          console.error(`Failed to save ${variation.name} to database:`, dbError);
+        }
+      }
+
       results.push({
         name: variation.name,
-        imageUrl: imageResult.url,
+        imageUrl: permanentUrl,
         style: variation.name.toLowerCase().replace(/\s+/g, '-'),
       });
 
