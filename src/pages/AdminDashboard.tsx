@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Shield, Users, Image, Menu, ArrowLeft } from "lucide-react";
+import { Shield, Users, Image, Menu, ArrowLeft, Settings } from "lucide-react";
 
 interface AdminStats {
   totalUsers: number;
@@ -159,6 +159,10 @@ export default function AdminDashboard() {
               <p className="text-muted-foreground">System overview and user management</p>
             </div>
           </div>
+          <Button onClick={() => navigate('/admin/settings')}>
+            <Settings className="w-4 h-4 mr-2" />
+            System Settings
+          </Button>
         </div>
 
         {/* Stats Grid */}
