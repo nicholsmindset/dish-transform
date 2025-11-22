@@ -13,6 +13,7 @@ import MenuBuilder from "./pages/MenuBuilder";
 import MenuEditor from "./pages/MenuEditor";
 import BatchUploadPage from "./pages/BatchUploadPage";
 import AdminDashboard from "./pages/AdminDashboard";
+import AdminSettings from "./pages/AdminSettings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -33,6 +34,7 @@ const App = () => (
         <Route path="/menu/:menuId" element={<MenuEditor />} />
         <Route path="/batch" element={<BatchUploadPage />} />
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/settings" element={<AdminSettings />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
