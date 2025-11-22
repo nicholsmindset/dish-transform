@@ -4,9 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { LogOut, Plus, Search, Menu, Image as ImageIcon } from "lucide-react";
+import { LogOut, Plus, Search, Menu, Image as ImageIcon, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { User } from "@supabase/supabase-js";
+import { useUserRole } from "@/hooks/useUserRole";
 
 interface PhotoLibraryItem {
   id: string;
@@ -22,6 +23,7 @@ interface PhotoLibraryItem {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { isAdmin } = useUserRole();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [photos, setPhotos] = useState<PhotoLibraryItem[]>([]);
@@ -111,6 +113,12 @@ export default function Dashboard() {
               <Button variant="ghost" onClick={() => navigate("/settings")}>
                 Settings
               </Button>
+              {isAdmin && (
+                <Button variant="ghost" onClick={() => navigate("/admin")}>
+                  <Shield className="w-4 h-4 mr-2" />
+                  Admin
+                </Button>
+              )}
               <Button variant="ghost" onClick={handleLogout}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
