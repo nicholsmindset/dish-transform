@@ -6,8 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, Trash2, GripVertical, Save, Eye } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ArrowLeft, Plus, Trash2, GripVertical, Save, Eye, Sparkles, QrCode, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+import { QRCodeGenerator } from "@/components/QRCodeGenerator";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -39,7 +41,13 @@ interface EnhancedPhoto {
   };
 }
 
-function SortableMenuItem({ item, onUpdate, onDelete }: { item: MenuItem; onUpdate: (id: string, field: string, value: any) => void; onDelete: (id: string) => void }) {
+function SortableMenuItem({ item, onUpdate, onDelete, onGenerateDescription, isGenerating }: { 
+  item: MenuItem; 
+  onUpdate: (id: string, field: string, value: any) => void; 
+  onDelete: (id: string) => void;
+  onGenerateDescription: (id: string, dishName: string) => void;
+  isGenerating: boolean;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id });
 
   const style = {
@@ -65,12 +73,23 @@ function SortableMenuItem({ item, onUpdate, onDelete }: { item: MenuItem; onUpda
             placeholder="Dish name"
             className="font-semibold"
           />
-          <Textarea
-            value={item.description || ''}
-            onChange={(e) => onUpdate(item.id, 'description', e.target.value)}
-            placeholder="Description"
-            className="min-h-[60px]"
-          />
+          <div className="relative">
+            <Textarea
+              value={item.description || ''}
+              onChange={(e) => onUpdate(item.id, 'description', e.target.value)}
+              placeholder="Description"
+              className="min-h-[60px]"
+            />
+            <Button
+              size="sm"
+              variant="ghost"
+              className="absolute top-2 right-2"
+              onClick={() => onGenerateDescription(item.id, item.dish_name)}
+              disabled={isGenerating}
+            >
+              <Sparkles className="w-4 h-4" />
+            </Button>
+          </div>
           <div className="flex gap-3">
             <Input
               type="number"
@@ -112,6 +131,7 @@ export default function MenuEditor() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [availablePhotos, setAvailablePhotos] = useState<EnhancedPhoto[]>([]);
   const [showPhotoLibrary, setShowPhotoLibrary] = useState(false);
+  const [generatingDescription, setGeneratingDescription] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -306,6 +326,29 @@ export default function MenuEditor() {
     }
   };
 
+  const handleGenerateDescription = async (itemId: string, dishName: string) => {
+    setGeneratingDescription(itemId);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-dish-description', {
+        body: { dishName, tone: 'casual' }
+      });
+
+      if (error) throw error;
+
+      if (data.description) {
+        handleUpdateItem(itemId, 'description', data.description);
+        toast.success("Description generated!");
+      }
+    } catch (error: any) {
+      toast.error("Failed to generate description");
+      console.error(error);
+    } finally {
+      setGeneratingDescription(null);
+    }
+  };
+
+  const publicUrl = `${window.location.origin}/menu/public/${menuId}`;
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -343,6 +386,43 @@ export default function MenuEditor() {
                 <SelectItem value="elegant">Elegant Layout</SelectItem>
               </SelectContent>
             </Select>
+            {menu?.is_published && (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <QrCode className="w-4 h-4 mr-2" />
+                    QR Code
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Menu QR Code</DialogTitle>
+                  </DialogHeader>
+                  <QRCodeGenerator url={publicUrl} menuName={menu.name} />
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Public URL:</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={publicUrl}
+                        readOnly
+                        className="flex-1 px-3 py-2 text-sm border rounded-md bg-muted"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          navigator.clipboard.writeText(publicUrl);
+                          toast.success("URL copied!");
+                        }}
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
             <Button variant="outline" onClick={handleTogglePublish}>
               <Eye className="w-4 h-4 mr-2" />
               {menu?.is_published ? 'Unpublish' : 'Publish'}
@@ -425,6 +505,8 @@ export default function MenuEditor() {
                           item={item}
                           onUpdate={handleUpdateItem}
                           onDelete={handleDeleteItem}
+                          onGenerateDescription={handleGenerateDescription}
+                          isGenerating={generatingDescription === item.id}
                         />
                       ))}
                     </SortableContext>
