@@ -63,8 +63,8 @@ const PhotoLightbox = ({
           </div>
 
           {/* Main content */}
-          <div className="flex-1 flex items-center justify-center p-6 overflow-hidden">
-            <div className="max-w-5xl w-full">
+          <div className="flex-1 flex items-center justify-center p-6 overflow-hidden min-h-0">
+            <div className="w-full h-full flex items-center justify-center">
               <ComparisonSlider
                 beforeImage={originalImage}
                 afterImage={enhancedImage}

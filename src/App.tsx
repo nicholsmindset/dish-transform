@@ -12,6 +12,7 @@ import Settings from "./pages/Settings";
 import MenuBuilder from "./pages/MenuBuilder";
 import MenuEditor from "./pages/MenuEditor";
 import BatchUploadPage from "./pages/BatchUploadPage";
+import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,9 +29,10 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/photo/:id" element={<PhotoDetail />} />
         <Route path="/settings" element={<Settings />} />
-        <Route path="/menu" element={<MenuBuilder />} />
+          <Route path="/menu" element={<MenuBuilder />} />
         <Route path="/menu/:menuId" element={<MenuEditor />} />
         <Route path="/batch" element={<BatchUploadPage />} />
+          <Route path="/admin" element={<AdminDashboard />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
