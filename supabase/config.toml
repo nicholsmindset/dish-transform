@@ -8,3 +8,12 @@ verify_jwt = false
 
 [functions.generate-dish-description]
 verify_jwt = false
+
+[functions.create-checkout]
+verify_jwt = true
+
+[functions.verify-payment]
+verify_jwt = false
+
+[functions.check-tokens]
+verify_jwt = true
