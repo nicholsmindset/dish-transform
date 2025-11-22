@@ -338,6 +338,83 @@ export type Database = {
         }
         Relationships: []
       }
+      token_purchases: {
+        Row: {
+          amount_paid: number
+          created_at: string | null
+          currency: string
+          id: string
+          price_id: string
+          product_id: string
+          status: string
+          stripe_checkout_session_id: string
+          stripe_payment_intent_id: string | null
+          tokens_purchased: number
+          user_id: string
+        }
+        Insert: {
+          amount_paid: number
+          created_at?: string | null
+          currency?: string
+          id?: string
+          price_id: string
+          product_id: string
+          status?: string
+          stripe_checkout_session_id: string
+          stripe_payment_intent_id?: string | null
+          tokens_purchased: number
+          user_id: string
+        }
+        Update: {
+          amount_paid?: number
+          created_at?: string | null
+          currency?: string
+          id?: string
+          price_id?: string
+          product_id?: string
+          status?: string
+          stripe_checkout_session_id?: string
+          stripe_payment_intent_id?: string | null
+          tokens_purchased?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      token_usage: {
+        Row: {
+          action_type: string
+          created_at: string | null
+          id: string
+          photo_library_id: string | null
+          tokens_used: number
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string | null
+          id?: string
+          photo_library_id?: string | null
+          tokens_used: number
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string | null
+          id?: string
+          photo_library_id?: string | null
+          tokens_used?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "token_usage_photo_library_id_fkey"
+            columns: ["photo_library_id"]
+            isOneToOne: false
+            referencedRelation: "photo_library"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -355,6 +432,30 @@ export type Database = {
           created_at?: string | null
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_tokens: {
+        Row: {
+          created_at: string | null
+          id: string
+          tokens: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          tokens?: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          tokens?: number
+          updated_at?: string | null
           user_id?: string
         }
         Relationships: []

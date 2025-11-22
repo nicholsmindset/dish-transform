@@ -15,6 +15,8 @@ import PublicMenu from "./pages/PublicMenu";
 import BatchUploadPage from "./pages/BatchUploadPage";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminSettings from "./pages/AdminSettings";
+import Pricing from "./pages/Pricing";
+import PaymentSuccess from "./pages/PaymentSuccess";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -37,6 +39,8 @@ const App = () => (
         <Route path="/batch" element={<BatchUploadPage />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/settings" element={<AdminSettings />} />
+          <Route path="/pricing" element={<Pricing />} />
+          <Route path="/payment-success" element={<PaymentSuccess />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

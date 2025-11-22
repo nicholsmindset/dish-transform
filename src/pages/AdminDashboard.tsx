@@ -7,13 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Shield, Users, Image, Menu, ArrowLeft, Settings } from "lucide-react";
+import { Shield, Users, Image, Menu, ArrowLeft, Settings, Coins, DollarSign } from "lucide-react";
 
 interface AdminStats {
   totalUsers: number;
   totalPhotos: number;
   totalMenus: number;
   totalEnhanced: number;
+  totalTokensPurchased: number;
+  totalRevenue: number;
 }
 
 interface UserWithRole {
@@ -24,6 +26,16 @@ interface UserWithRole {
   roles: Array<{ role: string }>;
 }
 
+interface TokenPurchase {
+  id: string;
+  user_id: string;
+  tokens_purchased: number;
+  amount_paid: number;
+  status: string;
+  created_at: string;
+  profiles: { email: string; restaurant_name: string | null };
+}
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { role, loading: roleLoading } = useUserRole();
@@ -32,8 +44,11 @@ export default function AdminDashboard() {
     totalPhotos: 0,
     totalMenus: 0,
     totalEnhanced: 0,
+    totalTokensPurchased: 0,
+    totalRevenue: 0,
   });
   const [users, setUsers] = useState<UserWithRole[]>([]);
+  const [purchases, setPurchases] = useState<TokenPurchase[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -51,19 +66,52 @@ export default function AdminDashboard() {
   const loadAdminData = async () => {
     try {
       // Load stats
-      const [usersRes, photosRes, menusRes, enhancedRes] = await Promise.all([
+      const [usersRes, photosRes, menusRes, enhancedRes, purchasesRes] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
         supabase.from('photo_library').select('id', { count: 'exact', head: true }),
         supabase.from('menus').select('id', { count: 'exact', head: true }),
         supabase.from('enhanced_photos').select('id', { count: 'exact', head: true }),
+        supabase.from('token_purchases').select('tokens_purchased, amount_paid'),
       ]);
+
+      const totalTokens = purchasesRes.data?.reduce((sum, p) => sum + p.tokens_purchased, 0) || 0;
+      const totalRevenue = purchasesRes.data?.reduce((sum, p) => sum + p.amount_paid, 0) || 0;
 
       setStats({
         totalUsers: usersRes.count || 0,
         totalPhotos: photosRes.count || 0,
         totalMenus: menusRes.count || 0,
         totalEnhanced: enhancedRes.count || 0,
+        totalTokensPurchased: totalTokens,
+        totalRevenue: totalRevenue / 100, // Convert from cents to dollars
       });
+
+      // Load recent purchases
+      const { data: purchasesData, error: purchasesError } = await supabase
+        .from('token_purchases')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (purchasesError) throw purchasesError;
+      
+      // Fetch user emails for purchases
+      const purchasesWithUsers = await Promise.all(
+        (purchasesData || []).map(async (purchase) => {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('email, restaurant_name')
+            .eq('id', purchase.user_id)
+            .single();
+          
+          return {
+            ...purchase,
+            profiles: profile || { email: 'Unknown', restaurant_name: null },
+          };
+        })
+      );
+      
+      setPurchases(purchasesWithUsers as TokenPurchase[]);
 
       // Load users with roles
       const { data: usersData, error: usersError } = await supabase
@@ -166,7 +214,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Users</CardTitle>
@@ -206,7 +254,68 @@ export default function AdminDashboard() {
               <div className="text-2xl font-bold">{stats.totalMenus}</div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Tokens Sold</CardTitle>
+              <Coins className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalTokensPurchased.toLocaleString()}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-hero">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-primary-foreground">Total Revenue</CardTitle>
+              <DollarSign className="h-4 w-4 text-primary-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-primary-foreground">
+                ${stats.totalRevenue.toFixed(2)}
+              </div>
+            </CardContent>
+          </Card>
         </div>
+
+        {/* Recent Purchases */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Recent Token Purchases</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Restaurant</TableHead>
+                  <TableHead>Tokens</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {purchases.map((purchase) => (
+                  <TableRow key={purchase.id}>
+                    <TableCell className="font-medium">{purchase.profiles.email}</TableCell>
+                    <TableCell>{purchase.profiles.restaurant_name || '-'}</TableCell>
+                    <TableCell>{purchase.tokens_purchased} tokens</TableCell>
+                    <TableCell>${(purchase.amount_paid / 100).toFixed(2)}</TableCell>
+                    <TableCell>
+                      <Badge variant={purchase.status === 'completed' ? 'default' : 'secondary'}>
+                        {purchase.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(purchase.created_at).toLocaleDateString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
 
         {/* Users Table */}
         <Card>
