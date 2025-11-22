@@ -50,15 +50,22 @@ export default function PublicMenu() {
           description,
           price,
           section,
-          enhanced_photos!inner(image_url)
+          enhanced_photo_id,
+          enhanced_photos(image_url)
         `)
         .eq('menu_id', menuId)
         .order('position', { ascending: true });
 
       if (itemsError) throw itemsError;
+      
       const formattedItems = (itemsData || []).map((item: any) => ({
-        ...item,
-        image_url: item.enhanced_photos?.image_url
+        id: item.id,
+        dish_name: item.dish_name,
+        description: item.description,
+        price: item.price,
+        section: item.section,
+        image_url: item.enhanced_photos?.image_url || '',
+        enhanced_photos: item.enhanced_photos
       }));
       setItems(formattedItems);
     } catch (error) {

@@ -46,15 +46,15 @@ serve(async (req) => {
     const variations = [
       {
         name: "Clean White Background",
-        prompt: `Transform this food photo into professional restaurant photography. Place the dish on a clean white surface with studio lighting. The food should look exactly the same but with professional presentation: sharp focus, perfect lighting, appetizing colors, high-end restaurant quality. Maintain the exact dish composition and ingredients. Remove any amateur elements (phones, hands, messy backgrounds). Professional menu photography style. 4K quality, shallow depth of field.`,
+        prompt: `Transform this food photo into professional restaurant photography. Place the dish on a clean white surface with studio lighting. Make sure all plates, bowls, utensils, and surfaces are pristine and spotless - remove any stains, crumbs, or mess. The food should look exactly the same but with professional presentation: sharp focus, perfect lighting, appetizing colors, high-end restaurant quality. Maintain the exact dish composition and ingredients. Remove any amateur elements (phones, hands, messy backgrounds). Professional menu photography style. 4K quality, shallow depth of field.`,
       },
       {
         name: "Rustic Table Setting",
-        prompt: `Transform this food photo into professional restaurant photography. Place the dish on a rustic wooden table with natural ambient lighting. Add subtle context elements (napkin, cutlery) that enhance but don't distract. The food should look exactly the same but elevated: natural colors, warm lighting, cozy restaurant atmosphere. Maintain the exact dish composition and ingredients. Professional lifestyle food photography. 4K quality, inviting presentation.`,
+        prompt: `Transform this food photo into professional restaurant photography. Place the dish on a rustic wooden table with natural ambient lighting. Make sure all plates, bowls, utensils, and surfaces are clean and pristine. Add subtle context elements (napkin, cutlery) that enhance but don't distract. The food should look exactly the same but elevated: natural colors, warm lighting, cozy restaurant atmosphere. Maintain the exact dish composition and ingredients. Professional lifestyle food photography. 4K quality, inviting presentation.`,
       },
       {
         name: "Dark Moody Background",
-        prompt: `Transform this food photo into professional restaurant photography. Place the dish against a dark, moody background with dramatic side lighting. The food should look exactly the same but more sophisticated: rich colors, artistic shadows, fine dining aesthetic. Maintain the exact dish composition and ingredients. Professional editorial food photography with cinematic quality. 4K quality, elegant and upscale.`,
+        prompt: `Transform this food photo into professional restaurant photography. Place the dish against a dark, moody background with dramatic side lighting. Ensure plates, bowls, and any utensils are immaculately clean and polished. The food should look exactly the same but more sophisticated: rich colors, artistic shadows, fine dining aesthetic. Maintain the exact dish composition and ingredients. Professional editorial food photography with cinematic quality. 4K quality, elegant and upscale.`,
       },
     ];
 
