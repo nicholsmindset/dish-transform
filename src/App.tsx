@@ -11,6 +11,7 @@ import PhotoDetail from "./pages/PhotoDetail";
 import Settings from "./pages/Settings";
 import MenuBuilder from "./pages/MenuBuilder";
 import MenuEditor from "./pages/MenuEditor";
+import PublicMenu from "./pages/PublicMenu";
 import BatchUploadPage from "./pages/BatchUploadPage";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminSettings from "./pages/AdminSettings";
@@ -31,7 +32,8 @@ const App = () => (
           <Route path="/photo/:id" element={<PhotoDetail />} />
         <Route path="/settings" element={<Settings />} />
           <Route path="/menu" element={<MenuBuilder />} />
-        <Route path="/menu/:menuId" element={<MenuEditor />} />
+          <Route path="/menu/:menuId" element={<MenuEditor />} />
+          <Route path="/menu/public/:menuId" element={<PublicMenu />} />
         <Route path="/batch" element={<BatchUploadPage />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/settings" element={<AdminSettings />} />

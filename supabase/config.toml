@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.resize-for-social]
 verify_jwt = false
+
+[functions.generate-dish-description]
+verify_jwt = false
