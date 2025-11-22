@@ -14,7 +14,300 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      batch_uploads: {
+        Row: {
+          completed_images: number | null
+          created_at: string | null
+          id: string
+          status: string | null
+          total_images: number
+          user_id: string
+        }
+        Insert: {
+          completed_images?: number | null
+          created_at?: string | null
+          id?: string
+          status?: string | null
+          total_images: number
+          user_id: string
+        }
+        Update: {
+          completed_images?: number | null
+          created_at?: string | null
+          id?: string
+          status?: string | null
+          total_images?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "batch_uploads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brand_settings: {
+        Row: {
+          created_at: string | null
+          default_style: string | null
+          font_family: string | null
+          id: string
+          logo_url: string | null
+          primary_color: string | null
+          restaurant_name: string | null
+          secondary_color: string | null
+          user_id: string
+          watermark_enabled: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          default_style?: string | null
+          font_family?: string | null
+          id?: string
+          logo_url?: string | null
+          primary_color?: string | null
+          restaurant_name?: string | null
+          secondary_color?: string | null
+          user_id: string
+          watermark_enabled?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          default_style?: string | null
+          font_family?: string | null
+          id?: string
+          logo_url?: string | null
+          primary_color?: string | null
+          restaurant_name?: string | null
+          secondary_color?: string | null
+          user_id?: string
+          watermark_enabled?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_settings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enhanced_photos: {
+        Row: {
+          created_at: string | null
+          id: string
+          image_url: string
+          photo_library_id: string
+          style_name: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          image_url: string
+          photo_library_id: string
+          style_name: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          image_url?: string
+          photo_library_id?: string
+          style_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enhanced_photos_photo_library_id_fkey"
+            columns: ["photo_library_id"]
+            isOneToOne: false
+            referencedRelation: "photo_library"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      menu_items: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          dish_name: string
+          enhanced_photo_id: string | null
+          id: string
+          menu_id: string
+          position: number | null
+          price: number | null
+          section: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          dish_name: string
+          enhanced_photo_id?: string | null
+          id?: string
+          menu_id: string
+          position?: number | null
+          price?: number | null
+          section?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          dish_name?: string
+          enhanced_photo_id?: string | null
+          id?: string
+          menu_id?: string
+          position?: number | null
+          price?: number | null
+          section?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_items_enhanced_photo_id_fkey"
+            columns: ["enhanced_photo_id"]
+            isOneToOne: false
+            referencedRelation: "enhanced_photos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_items_menu_id_fkey"
+            columns: ["menu_id"]
+            isOneToOne: false
+            referencedRelation: "menus"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      menus: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_published: boolean | null
+          name: string
+          public_url: string | null
+          template: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_published?: boolean | null
+          name: string
+          public_url?: string | null
+          template?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_published?: boolean | null
+          name?: string
+          public_url?: string | null
+          template?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menus_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      photo_library: {
+        Row: {
+          batch_id: string | null
+          created_at: string | null
+          dish_name: string | null
+          id: string
+          original_image_url: string
+          user_id: string
+        }
+        Insert: {
+          batch_id?: string | null
+          created_at?: string | null
+          dish_name?: string | null
+          id?: string
+          original_image_url: string
+          user_id: string
+        }
+        Update: {
+          batch_id?: string | null
+          created_at?: string | null
+          dish_name?: string | null
+          id?: string
+          original_image_url?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "photo_library_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          id: string
+          restaurant_name: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          id: string
+          restaurant_name?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          restaurant_name?: string | null
+        }
+        Relationships: []
+      }
+      social_exports: {
+        Row: {
+          created_at: string | null
+          dimensions: string
+          enhanced_photo_id: string
+          id: string
+          image_url: string
+          platform: string
+        }
+        Insert: {
+          created_at?: string | null
+          dimensions: string
+          enhanced_photo_id: string
+          id?: string
+          image_url: string
+          platform: string
+        }
+        Update: {
+          created_at?: string | null
+          dimensions?: string
+          enhanced_photo_id?: string
+          id?: string
+          image_url?: string
+          platform?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_exports_enhanced_photo_id_fkey"
+            columns: ["enhanced_photo_id"]
+            isOneToOne: false
+            referencedRelation: "enhanced_photos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

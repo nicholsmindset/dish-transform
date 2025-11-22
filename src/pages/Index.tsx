@@ -1,5 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import Hero from "@/components/Hero";
 import PhotoUploadSection from "@/components/PhotoUploadSection";
 import LoadingState from "@/components/LoadingState";
@@ -7,6 +9,8 @@ import PhotoComparisonGrid from "@/components/PhotoComparisonGrid";
 import PhotoLightbox from "@/components/PhotoLightbox";
 import ResultsActions from "@/components/ResultsActions";
 import { Button } from "@/components/ui/button";
+import { User } from "@supabase/supabase-js";
+import { LogOut } from "lucide-react";
 import JSZip from "jszip";
 
 type AppState = "hero" | "upload" | "generating" | "results";
@@ -19,6 +23,8 @@ interface EnhancedPhoto {
 
 const Index = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const [user, setUser] = useState<User | null>(null);
   const [appState, setAppState] = useState<AppState>("hero");
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -29,6 +35,18 @@ const Index = () => {
   const [completedCount, setCompletedCount] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxPhotoIndex, setLightboxPhotoIndex] = useState(0);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user || null);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user || null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleGetStarted = useCallback(() => {
     setAppState("upload");
@@ -70,6 +88,27 @@ const Index = () => {
     setCompletedCount(0);
 
     try {
+      let photoLibraryId = null;
+
+      // If user is logged in, save original photo to library
+      if (user) {
+        const { data: photoData, error: photoError } = await supabase
+          .from('photo_library')
+          .insert({
+            user_id: user.id,
+            original_image_url: originalImageUrl,
+            dish_name: selectedImage?.name.replace(/\.[^/.]+$/, "") || "Untitled Dish",
+          })
+          .select()
+          .single();
+
+        if (photoError) {
+          console.error("Failed to save to library:", photoError);
+        } else {
+          photoLibraryId = photoData.id;
+        }
+      }
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/enhance-food-photo`,
         {
@@ -80,6 +119,8 @@ const Index = () => {
           },
           body: JSON.stringify({
             imageUrl: originalImageUrl,
+            userId: user?.id,
+            photoLibraryId,
           }),
         }
       );
@@ -101,7 +142,9 @@ const Index = () => {
 
       toast({
         title: "Success!",
-        description: `Generated ${data.photos.length} professional versions of your food photo`,
+        description: user 
+          ? `Generated ${data.photos.length} professional versions and saved to your library`
+          : `Generated ${data.photos.length} professional versions. Sign up to save them!`,
       });
     } catch (error) {
       console.error("Error enhancing photo:", error);
@@ -113,7 +156,7 @@ const Index = () => {
       setAppState("upload");
       setIsGenerating(false);
     }
-  }, [originalImageUrl, toast]);
+  }, [originalImageUrl, user, selectedImage, toast]);
 
   const handleDownloadSingle = useCallback(async (imageUrl: string, name: string) => {
     try {
@@ -206,6 +249,45 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <h1 
+              onClick={() => setAppState("hero")}
+              className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent cursor-pointer"
+            >
+              MenuVisuals
+            </h1>
+            <div className="flex items-center gap-4">
+              {user ? (
+                <>
+                  <Button variant="ghost" onClick={() => navigate("/dashboard")}>
+                    My Library
+                  </Button>
+                  <Button variant="ghost" onClick={async () => {
+                    await supabase.auth.signOut();
+                    toast({ title: "Signed out successfully" });
+                  }}>
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Logout
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="ghost" onClick={() => navigate("/auth")}>
+                    Sign In
+                  </Button>
+                  <Button onClick={() => navigate("/auth")}>
+                    Get Started
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
       {appState === "hero" && <Hero onGetStarted={handleGetStarted} />}
 
       {appState === "upload" && (
