@@ -22,6 +22,13 @@ serve(async (req) => {
       );
     }
 
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ error: "Missing userId - authentication required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const FAL_KEY = Deno.env.get("FAL_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -35,6 +42,34 @@ serve(async (req) => {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Check token balance before processing
+    const { data: tokenData, error: tokenError } = await supabase
+      .from('user_tokens')
+      .select('tokens')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (tokenError) {
+      console.error("Error checking tokens:", tokenError);
+      throw new Error("Failed to verify token balance");
+    }
+
+    const currentTokens = tokenData?.tokens || 0;
+    const tokensRequired = 1; // 1 token per enhancement
+
+    if (currentTokens < tokensRequired) {
+      return new Response(
+        JSON.stringify({
+          error: "Insufficient tokens",
+          tokensRequired,
+          tokensAvailable: currentTokens
+        }),
+        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`User ${userId} has ${currentTokens} tokens, requiring ${tokensRequired}`);
 
     fal.config({
       credentials: FAL_KEY,
@@ -163,12 +198,63 @@ serve(async (req) => {
       throw new Error("No enhanced photos were generated successfully");
     }
 
+    // Deduct token after successful enhancement
+    const newTokenBalance = currentTokens - tokensRequired;
+
+    // Update or insert token balance
+    if (tokenData) {
+      const { error: updateError } = await supabase
+        .from('user_tokens')
+        .update({
+          tokens: newTokenBalance,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId);
+
+      if (updateError) {
+        console.error("Error deducting tokens:", updateError);
+        // Don't fail the request, but log the error
+      }
+    } else {
+      // This shouldn't happen if user had tokens, but handle edge case
+      console.warn("No token record found for user, creating one with negative balance");
+      const { error: insertError } = await supabase
+        .from('user_tokens')
+        .insert({
+          user_id: userId,
+          tokens: newTokenBalance,
+          updated_at: new Date().toISOString()
+        });
+
+      if (insertError) {
+        console.error("Error creating token record:", insertError);
+      }
+    }
+
+    // Record token usage
+    const { error: usageError } = await supabase
+      .from('token_usage')
+      .insert({
+        user_id: userId,
+        tokens_used: tokensRequired,
+        action_type: 'photo_enhancement',
+        photo_library_id: photoLibraryId || null
+      });
+
+    if (usageError) {
+      console.error("Error recording token usage:", usageError);
+    }
+
+    console.log(`Token deducted. User ${userId} now has ${newTokenBalance} tokens`);
+
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         photos: results,
         metadata: {
           totalGenerated: results.length,
-          generatedAt: new Date().toISOString()
+          generatedAt: new Date().toISOString(),
+          tokensUsed: tokensRequired,
+          tokensRemaining: newTokenBalance
         }
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

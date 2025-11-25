@@ -18,6 +18,7 @@ interface BatchPhoto {
   status: "pending" | "processing" | "complete" | "failed";
   enhancedUrls?: string[];
   error?: string;
+  photoLibraryId?: string;
 }
 
 const MAX_FILES = 10;
@@ -93,9 +94,9 @@ export default function BatchUpload({ userId, onComplete }: BatchUploadProps) {
     handleFileSelect({ target: input } as any);
   }, [handleFileSelect]);
 
-  const processPhoto = async (photo: BatchPhoto, index: number) => {
+  const processPhoto = async (photo: BatchPhoto, index: number, batchId: string | null) => {
     setCurrentIndex(index);
-    setPhotos(prev => prev.map((p, i) => 
+    setPhotos(prev => prev.map((p, i) =>
       i === index ? { ...p, status: "processing" } : p
     ));
 
@@ -107,13 +108,14 @@ export default function BatchUpload({ userId, onComplete }: BatchUploadProps) {
       });
       const imageUrl = await base64Promise;
 
-      // Save to photo library
+      // Save to photo library with batch_id
       const { data: photoData, error: photoError } = await supabase
         .from('photo_library')
         .insert({
           user_id: userId,
           original_image_url: imageUrl,
           dish_name: photo.file.name.replace(/\.[^/.]+$/, ""),
+          batch_id: batchId,
         })
         .select()
         .single();
@@ -139,20 +141,45 @@ export default function BatchUpload({ userId, onComplete }: BatchUploadProps) {
 
       if (!response.ok) {
         const errorData = await response.json();
+
+        // Handle insufficient tokens - stop the batch
+        if (response.status === 402) {
+          toast.error(`Insufficient tokens. ${errorData.tokensAvailable || 0} tokens remaining.`);
+          throw new Error("INSUFFICIENT_TOKENS");
+        }
+
         throw new Error(errorData.error || "Failed to enhance photo");
       }
 
       const data = await response.json();
       const enhancedUrls = data.photos.map((p: any) => p.imageUrl);
 
-      setPhotos(prev => prev.map((p, i) => 
-        i === index ? { ...p, status: "complete", enhancedUrls } : p
+      // Update token balance from response
+      if (data.metadata?.tokensRemaining !== undefined) {
+        setTokenBalance(data.metadata.tokensRemaining);
+      }
+
+      setPhotos(prev => prev.map((p, i) =>
+        i === index ? { ...p, status: "complete", enhancedUrls, photoLibraryId: photoData.id } : p
       ));
+
+      return true; // Success
     } catch (error: any) {
       console.error(`Failed to process photo ${index}:`, error);
-      setPhotos(prev => prev.map((p, i) => 
+
+      // If insufficient tokens, propagate to stop batch
+      if (error.message === "INSUFFICIENT_TOKENS") {
+        setPhotos(prev => prev.map((p, i) =>
+          i === index ? { ...p, status: "failed", error: "Insufficient tokens" } : p
+        ));
+        throw error; // Re-throw to stop batch processing
+      }
+
+      setPhotos(prev => prev.map((p, i) =>
         i === index ? { ...p, status: "failed", error: error.message } : p
       ));
+
+      return false; // Failed but continue
     }
   };
 
@@ -170,33 +197,76 @@ export default function BatchUpload({ userId, onComplete }: BatchUploadProps) {
     setIsProcessing(true);
 
     // Create batch record
-    const { data: batchData } = await supabase
+    const { data: batchData, error: batchError } = await supabase
       .from('batch_uploads')
       .insert({
         user_id: userId,
         total_images: photos.length,
+        status: 'processing',
       })
       .select()
       .single();
 
+    if (batchError) {
+      console.error("Failed to create batch record:", batchError);
+    }
+
+    const batchId = batchData?.id || null;
+    let stoppedDueToTokens = false;
+
     // Process each photo sequentially
     for (let i = 0; i < photos.length; i++) {
-      await processPhoto(photos[i], i);
+      try {
+        await processPhoto(photos[i], i, batchId);
+      } catch (error: any) {
+        if (error.message === "INSUFFICIENT_TOKENS") {
+          stoppedDueToTokens = true;
+          // Mark remaining photos as pending (not processed)
+          setPhotos(prev => prev.map((p, idx) =>
+            idx > i && p.status === "pending" ? { ...p, status: "pending" } : p
+          ));
+          break; // Stop processing
+        }
+        // Other errors - continue with next photo
+      }
     }
 
     // Update batch status
-    if (batchData) {
+    if (batchId) {
+      const currentPhotos = photos; // Get latest state
+      const completedCount = currentPhotos.filter(p => p.status === "complete").length;
+      const failedCount = currentPhotos.filter(p => p.status === "failed").length;
+
       await supabase
         .from('batch_uploads')
         .update({
-          completed_images: photos.filter(p => p.status === "complete").length,
-          status: photos.every(p => p.status === "complete") ? "complete" : "partial",
+          completed_images: completedCount,
+          status: stoppedDueToTokens
+            ? 'insufficient_tokens'
+            : completedCount === photos.length
+              ? 'complete'
+              : failedCount === photos.length
+                ? 'failed'
+                : 'partial',
         })
-        .eq('id', batchData.id);
+        .eq('id', batchId);
     }
 
     setIsProcessing(false);
-    toast.success("Batch processing complete!");
+
+    if (stoppedDueToTokens) {
+      const completed = photos.filter(p => p.status === "complete").length;
+      toast.error(`Batch stopped: insufficient tokens. ${completed} of ${photos.length} photos completed.`);
+      navigate('/pricing');
+    } else {
+      const completed = photos.filter(p => p.status === "complete").length;
+      const failed = photos.filter(p => p.status === "failed").length;
+      if (failed > 0) {
+        toast.warning(`Batch complete: ${completed} succeeded, ${failed} failed.`);
+      } else {
+        toast.success(`Batch processing complete! ${completed} photos enhanced.`);
+      }
+    }
     onComplete?.();
   };
 

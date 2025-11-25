@@ -154,6 +154,33 @@ const Index = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
+
+        // Handle specific error codes
+        if (response.status === 402) {
+          // Insufficient tokens
+          toast({
+            title: "Insufficient tokens",
+            description: `You need ${errorData.tokensRequired || 1} token(s) but have ${errorData.tokensAvailable || 0}. Please purchase more tokens.`,
+            variant: "destructive",
+          });
+          setAppState("upload");
+          setIsGenerating(false);
+          navigate("/pricing");
+          return;
+        }
+
+        if (response.status === 401) {
+          toast({
+            title: "Authentication required",
+            description: "Please sign in to enhance photos.",
+            variant: "destructive",
+          });
+          setAppState("upload");
+          setIsGenerating(false);
+          navigate("/auth");
+          return;
+        }
+
         throw new Error(errorData.error || "Failed to enhance photo");
       }
 
@@ -167,10 +194,15 @@ const Index = () => {
       setAppState("results");
       setIsGenerating(false);
 
+      // Show tokens remaining in success message
+      const tokensMessage = data.metadata?.tokensRemaining !== undefined
+        ? ` (${data.metadata.tokensRemaining} tokens remaining)`
+        : '';
+
       toast({
         title: "Success!",
-        description: user 
-          ? `Generated ${data.photos.length} professional versions and saved to your library`
+        description: user
+          ? `Generated ${data.photos.length} professional versions and saved to your library${tokensMessage}`
           : `Generated ${data.photos.length} professional versions. Sign up to save them!`,
       });
     } catch (error) {
@@ -318,6 +350,20 @@ const Index = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
+
+        // Handle specific error codes
+        if (response.status === 402) {
+          toast({
+            title: "Insufficient tokens",
+            description: `You need ${errorData.tokensRequired || 1} token(s) but have ${errorData.tokensAvailable || 0}. Please purchase more tokens.`,
+            variant: "destructive",
+          });
+          setAppState("results");
+          setIsGenerating(false);
+          navigate("/pricing");
+          return;
+        }
+
         throw new Error(errorData.error || "Failed to regenerate styles");
       }
 
@@ -336,9 +382,14 @@ const Index = () => {
       setAppState("results");
       setIsGenerating(false);
 
+      // Show tokens remaining
+      const tokensMessage = data.metadata?.tokensRemaining !== undefined
+        ? ` (${data.metadata.tokensRemaining} tokens remaining)`
+        : '';
+
       toast({
         title: "Regenerated!",
-        description: `Successfully regenerated ${data.photos.length} style(s)`,
+        description: `Successfully regenerated ${data.photos.length} style(s)${tokensMessage}`,
       });
     } catch (error) {
       console.error("Error regenerating:", error);

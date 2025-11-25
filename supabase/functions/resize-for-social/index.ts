@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { Image } from "https://deno.land/x/imagescript@1.2.15/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,17 +8,62 @@ const corsHeaders = {
 };
 
 interface PlatformDimensions {
-  [key: string]: { width: number; height: number };
+  width: number;
+  height: number;
+  name: string;
 }
 
-const PLATFORM_SIZES: PlatformDimensions = {
-  'instagram_post': { width: 1080, height: 1080 },
-  'instagram_story': { width: 1080, height: 1920 },
-  'facebook_post': { width: 1200, height: 630 },
-  'twitter_post': { width: 1200, height: 675 },
-  'pinterest_pin': { width: 1000, height: 1500 },
-  'tiktok': { width: 1080, height: 1920 },
+const PLATFORM_SIZES: Record<string, PlatformDimensions> = {
+  'instagram_post': { width: 1080, height: 1080, name: 'Instagram Post' },
+  'instagram_story': { width: 1080, height: 1920, name: 'Instagram Story' },
+  'facebook_post': { width: 1200, height: 630, name: 'Facebook Post' },
+  'twitter_post': { width: 1200, height: 675, name: 'Twitter/X Post' },
+  'pinterest_pin': { width: 1000, height: 1500, name: 'Pinterest Pin' },
+  'tiktok': { width: 1080, height: 1920, name: 'TikTok' },
 };
+
+// Resize image to fit within dimensions while maintaining aspect ratio, then crop to exact size
+async function resizeAndCrop(
+  imageData: Uint8Array,
+  targetWidth: number,
+  targetHeight: number
+): Promise<Uint8Array> {
+  const image = await Image.decode(imageData);
+
+  const srcWidth = image.width;
+  const srcHeight = image.height;
+  const targetRatio = targetWidth / targetHeight;
+  const srcRatio = srcWidth / srcHeight;
+
+  let cropWidth: number;
+  let cropHeight: number;
+  let cropX: number;
+  let cropY: number;
+
+  // Determine crop dimensions to match target aspect ratio
+  if (srcRatio > targetRatio) {
+    // Source is wider - crop horizontally
+    cropHeight = srcHeight;
+    cropWidth = Math.round(srcHeight * targetRatio);
+    cropX = Math.round((srcWidth - cropWidth) / 2);
+    cropY = 0;
+  } else {
+    // Source is taller - crop vertically
+    cropWidth = srcWidth;
+    cropHeight = Math.round(srcWidth / targetRatio);
+    cropX = 0;
+    cropY = Math.round((srcHeight - cropHeight) / 2);
+  }
+
+  // Crop to aspect ratio
+  const cropped = image.crop(cropX, cropY, cropWidth, cropHeight);
+
+  // Resize to target dimensions
+  const resized = cropped.resize(targetWidth, targetHeight);
+
+  // Encode as PNG
+  return await resized.encode();
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -25,7 +71,7 @@ serve(async (req) => {
   }
 
   try {
-    const { imageUrl, platforms, enhancedPhotoId } = await req.json();
+    const { imageUrl, platforms, enhancedPhotoId, userId } = await req.json();
 
     if (!imageUrl || !platforms || !Array.isArray(platforms)) {
       return new Response(
@@ -44,9 +90,17 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // Fetch the original image
+    console.log("Fetching original image...");
     const imageResponse = await fetch(imageUrl);
-    const imageBlob = await imageResponse.blob();
-    
+    if (!imageResponse.ok) {
+      throw new Error(`Failed to fetch image: ${imageResponse.status}`);
+    }
+
+    const imageArrayBuffer = await imageResponse.arrayBuffer();
+    const originalImageData = new Uint8Array(imageArrayBuffer);
+
+    console.log(`Original image size: ${originalImageData.length} bytes`);
+
     const results = [];
 
     for (const platform of platforms) {
@@ -58,53 +112,67 @@ serve(async (req) => {
       const dimensions = PLATFORM_SIZES[platform];
       console.log(`Resizing for ${platform}: ${dimensions.width}x${dimensions.height}`);
 
-      // For now, we'll store the original image with platform metadata
-      // In a production app, you'd use a proper image processing library
-      const fileName = `social/${Date.now()}-${platform}.png`;
-      const imageArrayBuffer = await imageBlob.arrayBuffer();
-      const imageBuffer = new Uint8Array(imageArrayBuffer);
+      try {
+        // Actually resize the image
+        const resizedImageData = await resizeAndCrop(
+          originalImageData,
+          dimensions.width,
+          dimensions.height
+        );
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('enhanced-photos')
-        .upload(fileName, imageBuffer, {
-          contentType: 'image/png',
-          upsert: false
-        });
+        console.log(`Resized image size for ${platform}: ${resizedImageData.length} bytes`);
 
-      if (uploadError) {
-        console.error(`Failed to upload for ${platform}:`, uploadError);
-        continue;
-      }
+        // Upload to storage
+        const fileName = `social/${userId || 'anonymous'}/${Date.now()}-${platform}.png`;
 
-      const { data: urlData } = supabase.storage
-        .from('enhanced-photos')
-        .getPublicUrl(fileName);
-
-      const socialUrl = urlData.publicUrl;
-
-      // Save to database if enhancedPhotoId provided
-      if (enhancedPhotoId) {
-        const { error: dbError } = await supabase
-          .from('social_exports')
-          .insert({
-            enhanced_photo_id: enhancedPhotoId,
-            platform: platform,
-            dimensions: `${dimensions.width}x${dimensions.height}`,
-            image_url: socialUrl
+        const { error: uploadError } = await supabase.storage
+          .from('enhanced-photos')
+          .upload(fileName, resizedImageData, {
+            contentType: 'image/png',
+            upsert: false
           });
 
-        if (dbError) {
-          console.error(`Failed to save ${platform} export to database:`, dbError);
+        if (uploadError) {
+          console.error(`Failed to upload for ${platform}:`, uploadError);
+          continue;
         }
+
+        const { data: urlData } = supabase.storage
+          .from('enhanced-photos')
+          .getPublicUrl(fileName);
+
+        const socialUrl = urlData.publicUrl;
+
+        // Save to database if enhancedPhotoId provided
+        if (enhancedPhotoId) {
+          const { error: dbError } = await supabase
+            .from('social_exports')
+            .insert({
+              enhanced_photo_id: enhancedPhotoId,
+              platform: platform,
+              dimensions: `${dimensions.width}x${dimensions.height}`,
+              image_url: socialUrl
+            });
+
+          if (dbError) {
+            console.error(`Failed to save ${platform} export to database:`, dbError);
+          }
+        }
+
+        results.push({
+          platform,
+          platformName: dimensions.name,
+          dimensions: `${dimensions.width}x${dimensions.height}`,
+          width: dimensions.width,
+          height: dimensions.height,
+          imageUrl: socialUrl
+        });
+
+        console.log(`${platform} complete`);
+      } catch (resizeError) {
+        console.error(`Failed to resize for ${platform}:`, resizeError);
+        // Continue with other platforms
       }
-
-      results.push({
-        platform,
-        dimensions: `${dimensions.width}x${dimensions.height}`,
-        imageUrl: socialUrl
-      });
-
-      console.log(`${platform} complete`);
     }
 
     if (results.length === 0) {
@@ -112,7 +180,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         exports: results,
         metadata: {
           totalGenerated: results.length,

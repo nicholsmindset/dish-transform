@@ -345,18 +345,31 @@ export default function MenuEditor() {
   const handleGenerateDescription = async (itemId: string, dishName: string) => {
     setGeneratingDescription(itemId);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+
       const { data, error } = await supabase.functions.invoke('generate-dish-description', {
-        body: { dishName, tone: 'casual' }
+        body: { dishName, tone: 'casual', userId: user?.id }
       });
 
-      if (error) throw error;
+      if (error) {
+        // Handle rate limit
+        if (error.message?.includes('Rate limit')) {
+          toast.error("Rate limit exceeded. Try again in an hour.");
+          return;
+        }
+        throw error;
+      }
 
       if (data.description) {
         handleUpdateItem(itemId, 'description', data.description);
         toast.success("Description generated!");
       }
     } catch (error: any) {
-      toast.error("Failed to generate description");
+      if (error.message?.includes('Rate limit')) {
+        toast.error("You've reached the limit of 20 descriptions per hour.");
+      } else {
+        toast.error("Failed to generate description");
+      }
       console.error(error);
     } finally {
       setGeneratingDescription(null);
