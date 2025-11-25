@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { LogOut, Plus, Search, Menu, Image as ImageIcon, Shield } from "lucide-react";
+import { LogOut, Plus, Search, Menu, Image as ImageIcon, Shield, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { User } from "@supabase/supabase-js";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -21,6 +21,8 @@ interface PhotoLibraryItem {
   }>;
 }
 
+const PHOTOS_PER_PAGE = 12;
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { isAdmin } = useUserRole();
@@ -28,6 +30,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [photos, setPhotos] = useState<PhotoLibraryItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     checkUser();
@@ -56,8 +61,21 @@ export default function Dashboard() {
     return () => subscription.unsubscribe();
   };
 
-  const loadPhotos = async (userId: string) => {
+  const loadPhotos = async (userId: string, page: number = 1) => {
     try {
+      // Get total count first
+      const { count, error: countError } = await supabase
+        .from('photo_library')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId);
+
+      if (countError) throw countError;
+      setTotalCount(count || 0);
+
+      // Get paginated data
+      const start = (page - 1) * PHOTOS_PER_PAGE;
+      const end = start + PHOTOS_PER_PAGE - 1;
+
       const { data, error } = await supabase
         .from('photo_library')
         .select(`
@@ -72,7 +90,8 @@ export default function Dashboard() {
           )
         `)
         .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(start, end);
 
       if (error) throw error;
       setPhotos(data || []);
@@ -83,6 +102,46 @@ export default function Dashboard() {
       setLoading(false);
     }
   };
+
+  const handlePageChange = (newPage: number) => {
+    if (user) {
+      setCurrentPage(newPage);
+      setLoading(true);
+      loadPhotos(user.id, newPage);
+    }
+  };
+
+  const handleDeletePhoto = async (e: React.MouseEvent, photoId: string) => {
+    e.stopPropagation(); // Prevent navigating to photo detail
+
+    if (!confirm("Are you sure you want to delete this photo and all its variations?")) {
+      return;
+    }
+
+    setDeleting(photoId);
+    try {
+      const { error } = await supabase
+        .from('photo_library')
+        .delete()
+        .eq('id', photoId)
+        .eq('user_id', user?.id);
+
+      if (error) throw error;
+
+      toast.success("Photo deleted");
+      // Reload current page
+      if (user) {
+        loadPhotos(user.id, currentPage);
+      }
+    } catch (error: any) {
+      toast.error("Failed to delete photo");
+      console.error(error);
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  const totalPages = Math.ceil(totalCount / PHOTOS_PER_PAGE);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -131,8 +190,8 @@ export default function Dashboard() {
       <main className="container mx-auto px-4 py-8">
         {/* Actions Bar */}
         <div className="flex items-center justify-between mb-8">
-          <div className="flex-1 max-w-md">
-            <div className="relative">
+          <div className="flex items-center gap-4">
+            <div className="relative max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 placeholder="Search by dish name..."
@@ -141,6 +200,11 @@ export default function Dashboard() {
                 className="pl-10"
               />
             </div>
+            {totalCount > 0 && (
+              <span className="text-sm text-muted-foreground">
+                {totalCount} photo{totalCount !== 1 ? 's' : ''} total
+              </span>
+            )}
           </div>
           <Button onClick={() => navigate("/")}>
             <Plus className="w-4 h-4 mr-2" />
@@ -168,31 +232,69 @@ export default function Dashboard() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPhotos.map((photo) => (
-              <Card 
-                key={photo.id} 
-                className="cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => navigate(`/photo/${photo.id}`)}
-              >
-                <CardContent className="p-4">
-                  <div className="aspect-[4/3] rounded-lg overflow-hidden mb-3">
-                    <img
-                      src={photo.original_image_url}
-                      alt={photo.dish_name || "Food photo"}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <h3 className="font-semibold mb-1">
-                    {photo.dish_name || "Unnamed Dish"}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {photo.enhanced_photos?.length || 0} variations • {new Date(photo.created_at).toLocaleDateString()}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filteredPhotos.map((photo) => (
+                <Card
+                  key={photo.id}
+                  className="cursor-pointer hover:shadow-lg transition-shadow group relative"
+                  onClick={() => navigate(`/photo/${photo.id}`)}
+                >
+                  <CardContent className="p-4">
+                    <div className="aspect-[4/3] rounded-lg overflow-hidden mb-3 relative">
+                      <img
+                        src={photo.original_image_url}
+                        alt={photo.dish_name || "Food photo"}
+                        className="w-full h-full object-cover"
+                      />
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => handleDeletePhoto(e, photo.id)}
+                        disabled={deleting === photo.id}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <h3 className="font-semibold mb-1">
+                      {photo.dish_name || "Unnamed Dish"}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {photo.enhanced_photos?.length || 0} variations • {new Date(photo.created_at).toLocaleDateString()}
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-4 mt-8">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1 || loading}
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Previous
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages || loading}
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>

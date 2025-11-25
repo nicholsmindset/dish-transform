@@ -22,6 +22,21 @@ interface BrandSettings {
 const FONT_OPTIONS = ['Inter', 'Playfair Display', 'Montserrat', 'Lora', 'Poppins', 'Roboto'];
 const STYLE_OPTIONS = ['Clean White Background', 'Rustic Table Setting', 'Dark Moody Background'];
 
+// Validation helpers
+const isValidHexColor = (color: string): boolean => {
+  return /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(color);
+};
+
+const isValidUrl = (url: string): boolean => {
+  if (!url) return true; // Empty URL is allowed
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export default function Settings() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -78,16 +93,51 @@ export default function Settings() {
     }
   };
 
+  const validateSettings = (): string | null => {
+    // Validate restaurant name
+    const trimmedName = settings.restaurant_name.trim();
+    if (trimmedName.length > 0 && trimmedName.length < 2) {
+      return "Restaurant name must be at least 2 characters";
+    }
+    if (trimmedName.length > 100) {
+      return "Restaurant name must be less than 100 characters";
+    }
+
+    // Validate logo URL
+    if (!isValidUrl(settings.logo_url)) {
+      return "Please enter a valid logo URL";
+    }
+
+    // Validate colors
+    if (!isValidHexColor(settings.primary_color)) {
+      return "Please enter a valid primary color (e.g., #ea580c)";
+    }
+    if (!isValidHexColor(settings.secondary_color)) {
+      return "Please enter a valid secondary color (e.g., #15803d)";
+    }
+
+    return null;
+  };
+
   const handleSave = async () => {
+    // Validate before saving
+    const validationError = validateSettings();
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      const trimmedName = settings.restaurant_name.trim();
+
       // Update profile
       await supabase
         .from('profiles')
-        .update({ restaurant_name: settings.restaurant_name })
+        .update({ restaurant_name: trimmedName })
         .eq('id', user.id);
 
       // Upsert brand settings
@@ -95,8 +145,8 @@ export default function Settings() {
         .from('brand_settings')
         .upsert({
           user_id: user.id,
-          restaurant_name: settings.restaurant_name,
-          logo_url: settings.logo_url,
+          restaurant_name: trimmedName,
+          logo_url: settings.logo_url.trim(),
           primary_color: settings.primary_color,
           secondary_color: settings.secondary_color,
           font_family: settings.font_family,
@@ -156,6 +206,19 @@ export default function Settings() {
                   onChange={(e) => setSettings({ ...settings, logo_url: e.target.value })}
                   placeholder="https://example.com/logo.png"
                 />
+                {settings.logo_url && isValidUrl(settings.logo_url) && (
+                  <div className="mt-2 p-4 border rounded-lg bg-muted/50">
+                    <p className="text-sm text-muted-foreground mb-2">Logo Preview:</p>
+                    <img
+                      src={settings.logo_url}
+                      alt="Logo preview"
+                      className="max-h-24 max-w-full object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

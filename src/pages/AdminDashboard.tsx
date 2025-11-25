@@ -7,7 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Shield, Users, Image, Menu, ArrowLeft, Settings, Coins, DollarSign } from "lucide-react";
+import { Shield, Users, Image, Menu, ArrowLeft, Settings, Coins, DollarSign, ChevronLeft, ChevronRight } from "lucide-react";
+
+const USERS_PER_PAGE = 10;
+const PURCHASES_PER_PAGE = 10;
 
 interface AdminStats {
   totalUsers: number;
@@ -50,6 +53,10 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [purchases, setPurchases] = useState<TokenPurchase[]>([]);
   const [loading, setLoading] = useState(true);
+  const [usersPage, setUsersPage] = useState(1);
+  const [purchasesPage, setPurchasesPage] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [totalPurchases, setTotalPurchases] = useState(0);
 
   useEffect(() => {
     if (!roleLoading && role !== 'admin') {
@@ -66,12 +73,13 @@ export default function AdminDashboard() {
   const loadAdminData = async () => {
     try {
       // Load stats
-      const [usersRes, photosRes, menusRes, enhancedRes, purchasesRes] = await Promise.all([
+      const [usersRes, photosRes, menusRes, enhancedRes, purchasesRes, purchasesCountRes] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
         supabase.from('photo_library').select('id', { count: 'exact', head: true }),
         supabase.from('menus').select('id', { count: 'exact', head: true }),
         supabase.from('enhanced_photos').select('id', { count: 'exact', head: true }),
         supabase.from('token_purchases').select('tokens_purchased, amount_paid'),
+        supabase.from('token_purchases').select('id', { count: 'exact', head: true }),
       ]);
 
       const totalTokens = purchasesRes.data?.reduce((sum, p) => sum + p.tokens_purchased, 0) || 0;
@@ -83,63 +91,15 @@ export default function AdminDashboard() {
         totalMenus: menusRes.count || 0,
         totalEnhanced: enhancedRes.count || 0,
         totalTokensPurchased: totalTokens,
-        totalRevenue: totalRevenue / 100, // Convert from cents to dollars
+        totalRevenue: totalRevenue / 100,
       });
 
-      // Load recent purchases
-      const { data: purchasesData, error: purchasesError } = await supabase
-        .from('token_purchases')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(20);
+      setTotalUsers(usersRes.count || 0);
+      setTotalPurchases(purchasesCountRes.count || 0);
 
-      if (purchasesError) throw purchasesError;
-      
-      // Fetch user emails for purchases
-      const purchasesWithUsers = await Promise.all(
-        (purchasesData || []).map(async (purchase) => {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('email, restaurant_name')
-            .eq('id', purchase.user_id)
-            .single();
-          
-          return {
-            ...purchase,
-            profiles: profile || { email: 'Unknown', restaurant_name: null },
-          };
-        })
-      );
-      
-      setPurchases(purchasesWithUsers as TokenPurchase[]);
-
-      // Load users with roles
-      const { data: usersData, error: usersError } = await supabase
-        .from('profiles')
-        .select(`
-          id,
-          email,
-          restaurant_name,
-          created_at
-        `)
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      if (usersError) throw usersError;
-
-      // Load roles for each user
-      const usersWithRoles = await Promise.all(
-        (usersData || []).map(async (user) => {
-          const { data: roles } = await supabase
-            .from('user_roles')
-            .select('role')
-            .eq('user_id', user.id);
-          
-          return { ...user, roles: roles || [] };
-        })
-      );
-
-      setUsers(usersWithRoles);
+      // Load paginated data
+      await loadPurchases(purchasesPage);
+      await loadUsers(usersPage);
     } catch (error: any) {
       toast.error("Failed to load admin data");
       console.error(error);
@@ -148,7 +108,92 @@ export default function AdminDashboard() {
     }
   };
 
+  const loadPurchases = async (page: number) => {
+    try {
+      const start = (page - 1) * PURCHASES_PER_PAGE;
+      const end = start + PURCHASES_PER_PAGE - 1;
+
+      const { data: purchasesData, error: purchasesError } = await supabase
+        .from('token_purchases')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(start, end);
+
+      if (purchasesError) throw purchasesError;
+
+      // Fetch user emails for purchases
+      const purchasesWithUsers = await Promise.all(
+        (purchasesData || []).map(async (purchase) => {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('email, restaurant_name')
+            .eq('id', purchase.user_id)
+            .single();
+
+          return {
+            ...purchase,
+            profiles: profile || { email: 'Unknown', restaurant_name: null },
+          };
+        })
+      );
+
+      setPurchases(purchasesWithUsers as TokenPurchase[]);
+    } catch (error) {
+      console.error('Error loading purchases:', error);
+    }
+  };
+
+  const loadUsers = async (page: number) => {
+    try {
+      const start = (page - 1) * USERS_PER_PAGE;
+      const end = start + USERS_PER_PAGE - 1;
+
+      // Load users with roles in a single query using join
+      const { data: usersData, error: usersError } = await supabase
+        .from('profiles')
+        .select(`
+          id,
+          email,
+          restaurant_name,
+          created_at,
+          user_roles (role)
+        `)
+        .order('created_at', { ascending: false })
+        .range(start, end);
+
+      if (usersError) throw usersError;
+
+      const usersWithRoles = (usersData || []).map((user: any) => ({
+        ...user,
+        roles: user.user_roles || [],
+      }));
+
+      setUsers(usersWithRoles);
+    } catch (error) {
+      console.error('Error loading users:', error);
+    }
+  };
+
+  const handleUsersPageChange = async (newPage: number) => {
+    setUsersPage(newPage);
+    await loadUsers(newPage);
+  };
+
+  const handlePurchasesPageChange = async (newPage: number) => {
+    setPurchasesPage(newPage);
+    await loadPurchases(newPage);
+  };
+
+  const totalUsersPages = Math.ceil(totalUsers / USERS_PER_PAGE);
+  const totalPurchasesPages = Math.ceil(totalPurchases / PURCHASES_PER_PAGE);
+
   const toggleAdminRole = async (userId: string, isCurrentlyAdmin: boolean) => {
+    if (!confirm(isCurrentlyAdmin
+      ? "Are you sure you want to remove admin privileges from this user?"
+      : "Are you sure you want to grant admin privileges to this user?")) {
+      return;
+    }
+
     try {
       if (isCurrentlyAdmin) {
         // Remove admin role
@@ -170,8 +215,8 @@ export default function AdminDashboard() {
         toast.success("Admin role granted");
       }
 
-      // Reload data
-      loadAdminData();
+      // Reload just users
+      await loadUsers(usersPage);
     } catch (error: any) {
       toast.error(error.message || "Failed to update role");
     }
@@ -281,7 +326,12 @@ export default function AdminDashboard() {
         {/* Recent Purchases */}
         <Card className="mb-8">
           <CardHeader>
-            <CardTitle>Recent Token Purchases</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              <span>Token Purchases</span>
+              <span className="text-sm font-normal text-muted-foreground">
+                {totalPurchases} total
+              </span>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
@@ -314,13 +364,43 @@ export default function AdminDashboard() {
                 ))}
               </TableBody>
             </Table>
+            {totalPurchasesPages > 1 && (
+              <div className="flex items-center justify-center gap-4 mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePurchasesPageChange(purchasesPage - 1)}
+                  disabled={purchasesPage === 1}
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Previous
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Page {purchasesPage} of {totalPurchasesPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePurchasesPageChange(purchasesPage + 1)}
+                  disabled={purchasesPage === totalPurchasesPages}
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
         {/* Users Table */}
         <Card>
           <CardHeader>
-            <CardTitle>User Management</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              <span>User Management</span>
+              <span className="text-sm font-normal text-muted-foreground">
+                {totalUsers} total
+              </span>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
@@ -362,6 +442,31 @@ export default function AdminDashboard() {
                 })}
               </TableBody>
             </Table>
+            {totalUsersPages > 1 && (
+              <div className="flex items-center justify-center gap-4 mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleUsersPageChange(usersPage - 1)}
+                  disabled={usersPage === 1}
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Previous
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Page {usersPage} of {totalUsersPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleUsersPageChange(usersPage + 1)}
+                  disabled={usersPage === totalUsersPages}
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

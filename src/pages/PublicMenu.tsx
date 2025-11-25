@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { MenuTemplate } from "@/components/MenuTemplates";
+import { Button } from "@/components/ui/button";
+import { Share2, Copy, Check } from "lucide-react";
+import { toast } from "sonner";
 
 interface MenuItem {
   id: string;
@@ -25,10 +28,55 @@ export default function PublicMenu() {
   const [loading, setLoading] = useState(true);
   const [menu, setMenu] = useState<Menu | null>(null);
   const [items, setItems] = useState<MenuItem[]>([]);
+  const [copied, setCopied] = useState(false);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     loadMenu();
   }, [menuId]);
+
+  // Update document title when menu loads
+  useEffect(() => {
+    if (menu) {
+      document.title = `${menu.name} | MenuVisuals`;
+      // Update meta description
+      const metaDescription = document.querySelector('meta[name="description"]');
+      if (metaDescription) {
+        metaDescription.setAttribute('content', `View the menu for ${menu.name}. Browse our delicious offerings.`);
+      }
+    }
+    return () => {
+      document.title = 'MenuVisuals';
+    };
+  }, [menu]);
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      toast.success("Link copied to clipboard!");
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      toast.error("Failed to copy link");
+    }
+  };
+
+  const handleShare = async () => {
+    if (navigator.share && menu) {
+      try {
+        await navigator.share({
+          title: menu.name,
+          text: `Check out the menu for ${menu.name}`,
+          url: window.location.href,
+        });
+      } catch (error) {
+        // User cancelled or share failed, fall back to copy
+        handleCopyLink();
+      }
+    } else {
+      handleCopyLink();
+    }
+  };
 
   const loadMenu = async () => {
     try {
@@ -39,7 +87,12 @@ export default function PublicMenu() {
         .eq('is_published', true)
         .single();
 
-      if (menuError) throw menuError;
+      if (menuError) {
+        if (menuError.code === 'PGRST116') {
+          setNotFound(true);
+        }
+        throw menuError;
+      }
       setMenu(menuData);
 
       const { data: itemsData, error: itemsError } = await supabase
@@ -57,7 +110,7 @@ export default function PublicMenu() {
         .order('position', { ascending: true });
 
       if (itemsError) throw itemsError;
-      
+
       const formattedItems = (itemsData || []).map((item: any) => ({
         id: item.id,
         dish_name: item.dish_name,
@@ -93,7 +146,14 @@ export default function PublicMenu() {
   if (!menu) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <p className="text-muted-foreground">Menu not found</p>
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-2">Menu Not Found</h1>
+          <p className="text-muted-foreground mb-4">
+            {notFound
+              ? "This menu doesn't exist or hasn't been published yet."
+              : "There was an error loading the menu."}
+          </p>
+        </div>
       </div>
     );
   }
@@ -105,10 +165,24 @@ export default function PublicMenu() {
           <h1 className="text-5xl font-bold mb-2 bg-gradient-hero bg-clip-text text-transparent">
             {menu.name}
           </h1>
-          <p className="text-muted-foreground">Our delicious offerings</p>
+          <p className="text-muted-foreground mb-4">Our delicious offerings</p>
+          <div className="flex justify-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleShare}>
+              <Share2 className="w-4 h-4 mr-2" />
+              Share Menu
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleCopyLink}>
+              {copied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
+              {copied ? "Copied!" : "Copy Link"}
+            </Button>
+          </div>
         </div>
 
         <MenuTemplate template={menu.template} items={items} groupedItems={groupedItems} />
+
+        <footer className="mt-12 text-center text-sm text-muted-foreground">
+          <p>Powered by MenuVisuals</p>
+        </footer>
       </div>
     </div>
   );

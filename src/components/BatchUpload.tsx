@@ -1,8 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Upload, X, CheckCircle2, AlertCircle, Download } from "lucide-react";
+import { Upload, X, CheckCircle2, AlertCircle, Coins } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -23,9 +24,29 @@ const MAX_FILES = 10;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export default function BatchUpload({ userId, onComplete }: BatchUploadProps) {
+  const navigate = useNavigate();
   const [photos, setPhotos] = useState<BatchPhoto[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [tokenBalance, setTokenBalance] = useState<number | null>(null);
+  const [loadingTokens, setLoadingTokens] = useState(true);
+
+  useEffect(() => {
+    checkTokenBalance();
+  }, []);
+
+  const checkTokenBalance = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('check-tokens');
+      if (error) throw error;
+      setTokenBalance(data.tokens || 0);
+    } catch (error) {
+      console.error('Error fetching token balance:', error);
+      setTokenBalance(0);
+    } finally {
+      setLoadingTokens(false);
+    }
+  };
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -138,6 +159,14 @@ export default function BatchUpload({ userId, onComplete }: BatchUploadProps) {
   const handleStartBatch = async () => {
     if (photos.length === 0) return;
 
+    // Check token balance before starting
+    const requiredTokens = photos.length;
+    if (tokenBalance !== null && tokenBalance < requiredTokens) {
+      toast.error(`Insufficient tokens. You need ${requiredTokens} tokens but only have ${tokenBalance}.`);
+      navigate('/pricing');
+      return;
+    }
+
     setIsProcessing(true);
 
     // Create batch record
@@ -216,16 +245,38 @@ export default function BatchUpload({ userId, onComplete }: BatchUploadProps) {
               <h3 className="text-xl font-semibold">
                 {isProcessing ? `Processing ${currentIndex + 1} of ${photos.length}` : `${photos.length} photos selected`}
               </h3>
-              {isProcessing && (
+              {isProcessing ? (
                 <p className="text-sm text-muted-foreground">
                   {completedCount} completed, {failedCount} failed
                 </p>
+              ) : (
+                <div className="flex items-center gap-4 mt-1">
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Coins className="w-4 h-4" />
+                    Cost: {photos.length} token{photos.length !== 1 ? 's' : ''}
+                  </p>
+                  {!loadingTokens && tokenBalance !== null && (
+                    <p className={`text-sm ${tokenBalance >= photos.length ? 'text-green-600' : 'text-red-600'}`}>
+                      Balance: {tokenBalance} tokens
+                    </p>
+                  )}
+                </div>
               )}
             </div>
             {!isProcessing && (
-              <Button onClick={handleStartBatch}>
-                Start Batch Enhancement
-              </Button>
+              <div className="flex items-center gap-2">
+                {!loadingTokens && tokenBalance !== null && tokenBalance < photos.length && (
+                  <Button variant="outline" onClick={() => navigate('/pricing')}>
+                    Buy Tokens
+                  </Button>
+                )}
+                <Button
+                  onClick={handleStartBatch}
+                  disabled={loadingTokens || (tokenBalance !== null && tokenBalance < photos.length)}
+                >
+                  Start Batch Enhancement
+                </Button>
+              </div>
             )}
           </div>
 
