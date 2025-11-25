@@ -56,8 +56,20 @@ export default function MenuBuilder() {
   };
 
   const handleCreateMenu = async () => {
-    if (!newMenuName.trim()) {
+    const trimmedName = newMenuName.trim();
+
+    if (!trimmedName) {
       toast.error("Please enter a menu name");
+      return;
+    }
+
+    if (trimmedName.length < 2) {
+      toast.error("Menu name must be at least 2 characters");
+      return;
+    }
+
+    if (trimmedName.length > 100) {
+      toast.error("Menu name must be less than 100 characters");
       return;
     }
 
@@ -70,7 +82,7 @@ export default function MenuBuilder() {
         .from('menus')
         .insert({
           user_id: user.id,
-          name: newMenuName,
+          name: trimmedName,
           template: 'grid',
           public_url: `${user.id}-${Date.now()}`,
         })

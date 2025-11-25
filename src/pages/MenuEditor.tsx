@@ -152,14 +152,23 @@ export default function MenuEditor() {
         return;
       }
 
-      // Load menu
+      // Load menu with ownership verification
       const { data: menuData, error: menuError } = await supabase
         .from('menus')
         .select('*')
         .eq('id', menuId)
+        .eq('user_id', user.id)
         .single();
 
-      if (menuError) throw menuError;
+      if (menuError) {
+        if (menuError.code === 'PGRST116') {
+          toast.error("Menu not found or access denied");
+        } else {
+          throw menuError;
+        }
+        navigate("/menu");
+        return;
+      }
       setMenu(menuData);
 
       // Load menu items
@@ -262,13 +271,20 @@ export default function MenuEditor() {
   };
 
   const handleSave = async () => {
+    // Validate required fields
+    const invalidItems = menuItems.filter(item => !item.dish_name || item.dish_name.trim() === '');
+    if (invalidItems.length > 0) {
+      toast.error(`Please provide a name for all menu items. ${invalidItems.length} item(s) missing names.`);
+      return;
+    }
+
     setSaving(true);
     try {
       // Update positions and details for all items
       const updates = menuItems.map((item, index) => ({
         id: item.id,
-        dish_name: item.dish_name,
-        description: item.description,
+        dish_name: item.dish_name.trim(),
+        description: item.description?.trim() || null,
         price: item.price,
         section: item.section,
         position: index,

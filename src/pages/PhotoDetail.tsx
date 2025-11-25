@@ -39,11 +39,20 @@ export default function PhotoDetail() {
   const [generatingSocial, setGeneratingSocial] = useState(false);
 
   useEffect(() => {
-    loadPhoto();
+    checkAuthAndLoadPhoto();
   }, [id]);
 
-  const loadPhoto = async () => {
+  const checkAuthAndLoadPhoto = async () => {
     try {
+      // Check if user is authenticated
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Please sign in to view photos");
+        navigate("/auth");
+        return;
+      }
+
+      // Load photo with ownership verification
       const { data, error } = await supabase
         .from('photo_library')
         .select(`
@@ -58,9 +67,18 @@ export default function PhotoDetail() {
           )
         `)
         .eq('id', id)
+        .eq('user_id', user.id)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === 'PGRST116') {
+          toast.error("Photo not found or access denied");
+        } else {
+          throw error;
+        }
+        navigate("/dashboard");
+        return;
+      }
       setPhoto(data);
     } catch (error: any) {
       toast.error("Failed to load photo");
@@ -119,10 +137,20 @@ export default function PhotoDetail() {
     }
 
     try {
+      // Get current user for ownership verification
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Please sign in to delete photos");
+        navigate("/auth");
+        return;
+      }
+
+      // Delete with ownership check
       const { error } = await supabase
         .from('photo_library')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id);
 
       if (error) throw error;
       toast.success("Photo deleted");

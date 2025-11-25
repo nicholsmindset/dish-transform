@@ -8,13 +8,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner";
 import { Utensils } from "lucide-react";
 
+type AuthMode = "login" | "signup" | "reset";
+
 export default function Auth() {
   const navigate = useNavigate();
-  const [isLogin, setIsLogin] = useState(true);
+  const [mode, setMode] = useState<AuthMode>("login");
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [restaurantName, setRestaurantName] = useState("");
+
+  const isLogin = mode === "login";
+  const isReset = mode === "reset";
 
   useEffect(() => {
     // Check if user is already logged in
@@ -38,7 +43,16 @@ export default function Auth() {
     setLoading(true);
 
     try {
-      if (isLogin) {
+      if (isReset) {
+        // Password reset flow
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth?mode=update-password`,
+        });
+
+        if (error) throw error;
+        toast.success("Password reset email sent! Check your inbox.");
+        setMode("login");
+      } else if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -47,6 +61,7 @@ export default function Auth() {
         if (error) throw error;
         toast.success("Welcome back!");
       } else {
+        // Sign up flow
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -59,7 +74,7 @@ export default function Auth() {
         });
 
         if (error) throw error;
-        
+
         // Update profile with restaurant name
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -89,12 +104,16 @@ export default function Auth() {
           </div>
           <CardTitle className="text-3xl">MenuVisuals</CardTitle>
           <CardDescription>
-            {isLogin ? "Sign in to your account" : "Create your account"}
+            {isReset
+              ? "Reset your password"
+              : isLogin
+                ? "Sign in to your account"
+                : "Create your account"}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
+            {mode === "signup" && (
               <div className="space-y-2">
                 <Label htmlFor="restaurantName">Restaurant Name</Label>
                 <Input
@@ -102,11 +121,11 @@ export default function Auth() {
                   placeholder="Enter your restaurant name"
                   value={restaurantName}
                   onChange={(e) => setRestaurantName(e.target.value)}
-                  required={!isLogin}
+                  required
                 />
               </div>
             )}
-            
+
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -119,35 +138,56 @@ export default function Auth() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-              />
-            </div>
+            {!isReset && (
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+              </div>
+            )}
 
-            <Button 
-              type="submit" 
-              className="w-full" 
+            <Button
+              type="submit"
+              className="w-full"
               disabled={loading}
             >
-              {loading ? "Loading..." : (isLogin ? "Sign In" : "Sign Up")}
+              {loading
+                ? "Loading..."
+                : isReset
+                  ? "Send Reset Email"
+                  : isLogin
+                    ? "Sign In"
+                    : "Sign Up"}
             </Button>
           </form>
 
-          <div className="mt-4 text-center text-sm">
+          <div className="mt-4 text-center text-sm space-y-2">
+            {isLogin && (
+              <button
+                type="button"
+                onClick={() => setMode("reset")}
+                className="text-muted-foreground hover:text-primary hover:underline block w-full"
+              >
+                Forgot your password?
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => setIsLogin(!isLogin)}
+              onClick={() => setMode(isReset ? "login" : isLogin ? "signup" : "login")}
               className="text-primary hover:underline"
             >
-              {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+              {isReset
+                ? "Back to sign in"
+                : isLogin
+                  ? "Don't have an account? Sign up"
+                  : "Already have an account? Sign in"}
             </button>
           </div>
         </CardContent>

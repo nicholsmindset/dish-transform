@@ -86,6 +86,27 @@ const Index = () => {
       return;
     }
 
+    // Check token balance for logged-in users
+    if (user) {
+      try {
+        const { data: tokenData, error: tokenError } = await supabase.functions.invoke('check-tokens');
+        if (tokenError) {
+          console.error("Token check error:", tokenError);
+        } else if (tokenData && tokenData.tokens < 1) {
+          toast({
+            title: "Insufficient tokens",
+            description: "You need at least 1 token to enhance photos. Please purchase more tokens.",
+            variant: "destructive",
+          });
+          navigate("/pricing");
+          return;
+        }
+      } catch (error) {
+        console.error("Token check failed:", error);
+        // Continue anyway if token check fails - let the backend handle it
+      }
+    }
+
     setIsGenerating(true);
     setAppState("generating");
     setCurrentPhoto("Analyzing your photo...");
@@ -162,7 +183,7 @@ const Index = () => {
       setAppState("upload");
       setIsGenerating(false);
     }
-  }, [originalImageUrl, user, selectedImage, toast]);
+  }, [originalImageUrl, user, selectedImage, toast, navigate]);
 
   const handleDownloadSingle = useCallback(async (imageUrl: string, name: string) => {
     try {
@@ -239,6 +260,26 @@ const Index = () => {
   const handleRegenerateStyles = useCallback(async (stylesToRegenerate: string[]) => {
     if (!originalImageUrl) return;
 
+    // Check token balance for logged-in users
+    if (user) {
+      try {
+        const { data: tokenData, error: tokenError } = await supabase.functions.invoke('check-tokens');
+        if (tokenError) {
+          console.error("Token check error:", tokenError);
+        } else if (tokenData && tokenData.tokens < 1) {
+          toast({
+            title: "Insufficient tokens",
+            description: "You need at least 1 token to regenerate styles. Please purchase more tokens.",
+            variant: "destructive",
+          });
+          navigate("/pricing");
+          return;
+        }
+      } catch (error) {
+        console.error("Token check failed:", error);
+      }
+    }
+
     setIsGenerating(true);
     setAppState("generating");
     setCurrentPhoto("Regenerating selected styles...");
@@ -309,7 +350,7 @@ const Index = () => {
       setAppState("results");
       setIsGenerating(false);
     }
-  }, [originalImageUrl, user, enhancedPhotos, toast]);
+  }, [originalImageUrl, user, enhancedPhotos, toast, navigate]);
 
   const handleOpenLightbox = useCallback((index: number) => {
     setLightboxPhotoIndex(index);
