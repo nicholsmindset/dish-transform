@@ -49,6 +49,7 @@ export function MenuTemplate({ template, items, groupedItems }: MenuTemplateProp
                     src={item.image_url}
                     alt={item.dish_name}
                     className="w-full h-64 object-cover rounded-lg shadow-food mx-auto"
+                    loading="lazy"
                   />
                 </div>
               ))}
@@ -73,6 +74,7 @@ export function MenuTemplate({ template, items, groupedItems }: MenuTemplateProp
                       src={item.image_url}
                       alt={item.dish_name}
                       className="w-full md:w-64 h-64 object-cover"
+                      loading="lazy"
                     />
                     <div className="p-6 flex-1">
                       <div className="flex justify-between items-start mb-2">
@@ -110,6 +112,7 @@ export function MenuTemplate({ template, items, groupedItems }: MenuTemplateProp
                   src={item.image_url}
                   alt={item.dish_name}
                   className="w-full h-64 object-cover"
+                  loading="lazy"
                 />
                 <div className="p-6">
                   <div className="flex justify-between items-start mb-2">

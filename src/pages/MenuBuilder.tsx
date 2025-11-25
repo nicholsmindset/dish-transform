@@ -4,7 +4,23 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Plus, Copy, Trash2, MoreVertical } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
 interface Menu {
@@ -21,6 +37,8 @@ export default function MenuBuilder() {
   const [menus, setMenus] = useState<Menu[]>([]);
   const [newMenuName, setNewMenuName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [menuToDelete, setMenuToDelete] = useState<Menu | null>(null);
+  const [duplicating, setDuplicating] = useState<string | null>(null);
 
   useEffect(() => {
     checkUser();
@@ -102,6 +120,94 @@ export default function MenuBuilder() {
     }
   };
 
+  const handleDuplicateMenu = async (menu: Menu, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDuplicating(menu.id);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Create duplicate menu
+      const { data: newMenu, error: menuError } = await supabase
+        .from('menus')
+        .insert({
+          user_id: user.id,
+          name: `${menu.name} (Copy)`,
+          template: menu.template,
+          is_published: false,
+          public_url: `${user.id}-${Date.now()}`,
+        })
+        .select()
+        .single();
+
+      if (menuError) throw menuError;
+
+      // Get menu items from original menu
+      const { data: items, error: itemsError } = await supabase
+        .from('menu_items')
+        .select('*')
+        .eq('menu_id', menu.id);
+
+      if (itemsError) throw itemsError;
+
+      // Duplicate menu items if any exist
+      if (items && items.length > 0) {
+        const duplicatedItems = items.map(item => ({
+          menu_id: newMenu.id,
+          enhanced_photo_id: item.enhanced_photo_id,
+          dish_name: item.dish_name,
+          description: item.description,
+          price: item.price,
+          section: item.section,
+          position: item.position,
+        }));
+
+        const { error: insertError } = await supabase
+          .from('menu_items')
+          .insert(duplicatedItems);
+
+        if (insertError) throw insertError;
+      }
+
+      toast.success(`Menu duplicated as "${newMenu.name}"`);
+      setMenus(prev => [newMenu, ...prev]);
+    } catch (error: any) {
+      toast.error("Failed to duplicate menu");
+      console.error(error);
+    } finally {
+      setDuplicating(null);
+    }
+  };
+
+  const handleDeleteMenu = async () => {
+    if (!menuToDelete) return;
+
+    try {
+      // Delete menu items first (cascade)
+      await supabase
+        .from('menu_items')
+        .delete()
+        .eq('menu_id', menuToDelete.id);
+
+      // Delete menu
+      const { error } = await supabase
+        .from('menus')
+        .delete()
+        .eq('id', menuToDelete.id);
+
+      if (error) throw error;
+
+      toast.success("Menu deleted");
+      setMenus(prev => prev.filter(m => m.id !== menuToDelete.id));
+    } catch (error: any) {
+      toast.error("Failed to delete menu");
+      console.error(error);
+    } finally {
+      setMenuToDelete(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -151,13 +257,45 @@ export default function MenuBuilder() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {menus.map((menu) => (
-              <Card 
+              <Card
                 key={menu.id}
-                className="cursor-pointer hover:shadow-lg transition-shadow"
+                className="cursor-pointer hover:shadow-lg transition-shadow relative group"
                 onClick={() => navigate(`/menu/${menu.id}`)}
               >
                 <CardContent className="p-6">
-                  <h3 className="font-semibold text-lg mb-2">{menu.name}</h3>
+                  <div className="flex justify-between items-start">
+                    <h3 className="font-semibold text-lg mb-2">{menu.name}</h3>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={(e) => handleDuplicateMenu(menu, e)}
+                          disabled={duplicating === menu.id}
+                        >
+                          <Copy className="w-4 h-4 mr-2" />
+                          {duplicating === menu.id ? 'Duplicating...' : 'Duplicate'}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuToDelete(menu);
+                          }}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                   <p className="text-sm text-muted-foreground mb-4">
                     {menu.template} • {menu.is_published ? 'Published' : 'Draft'}
                   </p>
@@ -169,6 +307,27 @@ export default function MenuBuilder() {
             ))}
           </div>
         )}
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={!!menuToDelete} onOpenChange={() => setMenuToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Menu</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete "{menuToDelete?.name}"? This will also delete all menu items. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteMenu}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

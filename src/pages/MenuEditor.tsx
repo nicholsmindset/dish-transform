@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Trash2, GripVertical, Save, Eye, Sparkles, QrCode, ExternalLink } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, GripVertical, Save, Eye, Sparkles, QrCode, Copy, ExternalLink, FileDown } from "lucide-react";
 import { toast } from "sonner";
 import { QRCodeGenerator } from "@/components/QRCodeGenerator";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
@@ -442,8 +442,17 @@ export default function MenuEditor() {
                         variant="outline"
                         onClick={() => {
                           navigator.clipboard.writeText(publicUrl);
-                          toast.success("URL copied!");
+                          toast.success("URL copied to clipboard!");
                         }}
+                        title="Copy URL"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => window.open(publicUrl, '_blank')}
+                        title="Open in new tab"
                       >
                         <ExternalLink className="w-4 h-4" />
                       </Button>
@@ -455,6 +464,23 @@ export default function MenuEditor() {
             <Button variant="outline" onClick={handleTogglePublish}>
               <Eye className="w-4 h-4 mr-2" />
               {menu?.is_published ? 'Unpublish' : 'Publish'}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const printWindow = window.open(publicUrl, '_blank');
+                if (printWindow) {
+                  printWindow.onload = () => {
+                    setTimeout(() => {
+                      printWindow.print();
+                    }, 500);
+                  };
+                }
+                toast.success("Opening print preview...");
+              }}
+            >
+              <FileDown className="w-4 h-4 mr-2" />
+              Export PDF
             </Button>
             <Button onClick={handleSave} disabled={saving}>
               <Save className="w-4 h-4 mr-2" />

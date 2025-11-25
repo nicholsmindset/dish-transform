@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { MenuTemplate } from "@/components/MenuTemplates";
 import { Button } from "@/components/ui/button";
-import { Share2, Copy, Check } from "lucide-react";
+import { Share2, Copy, Check, Printer } from "lucide-react";
 import { toast } from "sonner";
 
 interface MenuItem {
@@ -166,7 +166,7 @@ export default function PublicMenu() {
             {menu.name}
           </h1>
           <p className="text-muted-foreground mb-4">Our delicious offerings</p>
-          <div className="flex justify-center gap-2">
+          <div className="flex justify-center gap-2 print:hidden">
             <Button variant="outline" size="sm" onClick={handleShare}>
               <Share2 className="w-4 h-4 mr-2" />
               Share Menu
@@ -174,6 +174,10 @@ export default function PublicMenu() {
             <Button variant="outline" size="sm" onClick={handleCopyLink}>
               {copied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
               {copied ? "Copied!" : "Copy Link"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => window.print()}>
+              <Printer className="w-4 h-4 mr-2" />
+              Print / PDF
             </Button>
           </div>
         </div>

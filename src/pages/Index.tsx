@@ -11,6 +11,7 @@ import ResultsActions from "@/components/ResultsActions";
 import StyleSelector from "@/components/StyleSelector";
 import RegenerateOptions from "@/components/RegenerateOptions";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { User } from "@supabase/supabase-js";
 import { LogOut } from "lucide-react";
 import JSZip from "jszip";
@@ -434,7 +435,7 @@ const Index = () => {
             >
               MenuVisuals
             </h1>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
               {user ? (
                 <>
                   <Button variant="ghost" onClick={() => navigate("/dashboard")}>
@@ -458,6 +459,7 @@ const Index = () => {
                   </Button>
                 </>
               )}
+              <ThemeToggle />
             </div>
           </div>
         </div>

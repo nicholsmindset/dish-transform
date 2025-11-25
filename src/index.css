@@ -101,3 +101,54 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+/* Print styles for menu PDF export */
+@media print {
+  body {
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Hide non-essential elements */
+  .print\\:hidden,
+  button,
+  header,
+  footer,
+  nav {
+    display: none !important;
+  }
+
+  /* Keep footer in public menu visible */
+  .container footer {
+    display: block !important;
+  }
+
+  /* Optimize layout for print */
+  .container {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Ensure images print well */
+  img {
+    max-width: 100% !important;
+    page-break-inside: avoid;
+  }
+
+  /* Avoid page breaks in cards */
+  .card,
+  [class*="CardContent"] {
+    page-break-inside: avoid;
+  }
+
+  /* Menu title styling for print */
+  h1 {
+    color: #333 !important;
+    background: none !important;
+    -webkit-background-clip: initial !important;
+    background-clip: initial !important;
+    -webkit-text-fill-color: initial !important;
+  }
+}

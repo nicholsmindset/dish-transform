@@ -246,6 +246,7 @@ export default function Dashboard() {
                         src={photo.original_image_url}
                         alt={photo.dish_name || "Food photo"}
                         className="w-full h-full object-cover"
+                        loading="lazy"
                       />
                       <Button
                         variant="destructive"
