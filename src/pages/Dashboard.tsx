@@ -8,6 +8,10 @@ import { LogOut, Plus, Search, Menu, Image as ImageIcon, Shield, ChevronLeft, Ch
 import { toast } from "sonner";
 import { User } from "@supabase/supabase-js";
 import { useUserRole } from "@/hooks/useUserRole";
+import { UserAnalytics } from "@/components/UserAnalytics";
+import { TokenBalance } from "@/components/TokenBalance";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { PhotoGridSkeleton } from "@/components/PhotoCardSkeleton";
 
 interface PhotoLibraryItem {
   id: string;
@@ -178,6 +182,8 @@ export default function Dashboard() {
                   Admin
                 </Button>
               )}
+              <TokenBalance compact />
+              <ThemeToggle />
               <Button variant="ghost" onClick={handleLogout}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
@@ -188,6 +194,9 @@ export default function Dashboard() {
       </header>
 
       <main className="container mx-auto px-4 py-8">
+        {/* User Analytics */}
+        {user && <UserAnalytics userId={user.id} />}
+
         {/* Actions Bar */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
@@ -214,9 +223,7 @@ export default function Dashboard() {
 
         {/* Photo Gallery */}
         {loading ? (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">Loading your photos...</p>
-          </div>
+          <PhotoGridSkeleton count={8} />
         ) : filteredPhotos.length === 0 ? (
           <div className="text-center py-12">
             <ImageIcon className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />

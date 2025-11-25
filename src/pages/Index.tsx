@@ -12,6 +12,7 @@ import StyleSelector from "@/components/StyleSelector";
 import RegenerateOptions from "@/components/RegenerateOptions";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { TokenBalance } from "@/components/TokenBalance";
 import { User } from "@supabase/supabase-js";
 import { LogOut } from "lucide-react";
 import JSZip from "jszip";
@@ -441,6 +442,7 @@ const Index = () => {
                   <Button variant="ghost" onClick={() => navigate("/dashboard")}>
                     My Library
                   </Button>
+                  <TokenBalance compact />
                   <Button variant="ghost" onClick={async () => {
                     await supabase.auth.signOut();
                     toast({ title: "Signed out successfully" });

@@ -22,6 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { MenuGridSkeleton } from "@/components/PhotoCardSkeleton";
 
 interface Menu {
   id: string;
@@ -210,8 +211,17 @@ export default function MenuBuilder() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">Loading...</p>
+      <div className="min-h-screen bg-gradient-to-br from-background via-accent/5 to-secondary/10">
+        <div className="container mx-auto px-4 py-8">
+          <div className="mb-6">
+            <Button variant="ghost" disabled>
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Dashboard
+            </Button>
+          </div>
+          <h1 className="text-3xl font-bold mb-8">Menu Builder</h1>
+          <MenuGridSkeleton count={3} />
+        </div>
       </div>
     );
   }
