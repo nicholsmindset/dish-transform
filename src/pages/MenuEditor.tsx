@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { ArrowLeft, Plus, Trash2, GripVertical, Save, Eye, Sparkles, QrCode, Copy, ExternalLink, FileDown } from "lucide-react";
 import { toast } from "sonner";
 import { QRCodeGenerator } from "@/components/QRCodeGenerator";
+import { MenuAnalytics } from "@/components/MenuAnalytics";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -377,6 +378,7 @@ export default function MenuEditor() {
   };
 
   const publicUrl = `${window.location.origin}/menu/public/${menuId}`;
+  const qrUrl = `${publicUrl}?src=qr`; // Track QR scans separately
 
   if (loading) {
     return (
@@ -427,7 +429,7 @@ export default function MenuEditor() {
                   <DialogHeader>
                     <DialogTitle>Menu QR Code</DialogTitle>
                   </DialogHeader>
-                  <QRCodeGenerator url={publicUrl} menuName={menu.name} />
+                  <QRCodeGenerator url={qrUrl} menuName={menu.name} />
                   <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">Public URL:</p>
                     <div className="flex gap-2">
@@ -488,6 +490,14 @@ export default function MenuEditor() {
             </Button>
           </div>
         </div>
+
+        {/* Analytics Section - Only for published menus */}
+        {menu?.is_published && menuId && (
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold mb-4">Menu Analytics</h2>
+            <MenuAnalytics menuId={menuId} />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Sidebar - Photo Library */}

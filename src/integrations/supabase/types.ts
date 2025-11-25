@@ -128,6 +128,47 @@ export type Database = {
           },
         ]
       }
+      menu_views: {
+        Row: {
+          id: string
+          menu_id: string
+          viewed_at: string | null
+          source: string | null
+          user_agent: string | null
+          referrer: string | null
+          country: string | null
+          city: string | null
+        }
+        Insert: {
+          id?: string
+          menu_id: string
+          viewed_at?: string | null
+          source?: string | null
+          user_agent?: string | null
+          referrer?: string | null
+          country?: string | null
+          city?: string | null
+        }
+        Update: {
+          id?: string
+          menu_id?: string
+          viewed_at?: string | null
+          source?: string | null
+          user_agent?: string | null
+          referrer?: string | null
+          country?: string | null
+          city?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_views_menu_id_fkey"
+            columns: ["menu_id"]
+            isOneToOne: false
+            referencedRelation: "menus"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       menu_items: {
         Row: {
           created_at: string | null

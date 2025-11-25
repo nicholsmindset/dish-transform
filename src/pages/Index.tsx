@@ -13,11 +13,12 @@ import RegenerateOptions from "@/components/RegenerateOptions";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TokenBalance } from "@/components/TokenBalance";
+import { ImageCropper } from "@/components/ImageCropper";
 import { User } from "@supabase/supabase-js";
-import { LogOut } from "lucide-react";
+import { LogOut, Crop } from "lucide-react";
 import JSZip from "jszip";
 
-type AppState = "hero" | "upload" | "generating" | "results";
+type AppState = "hero" | "upload" | "cropping" | "generating" | "results";
 
 interface EnhancedPhoto {
   name: string;
@@ -76,6 +77,26 @@ const Index = () => {
     setSelectedImage(null);
     setImagePreview(null);
     setOriginalImageUrl(null);
+  }, []);
+
+  const handleStartCrop = useCallback(() => {
+    if (imagePreview) {
+      setAppState("cropping");
+    }
+  }, [imagePreview]);
+
+  const handleCropComplete = useCallback((croppedImageUrl: string) => {
+    setImagePreview(croppedImageUrl);
+    setOriginalImageUrl(croppedImageUrl);
+    setAppState("upload");
+    toast({
+      title: "Image cropped",
+      description: "Your image has been cropped successfully",
+    });
+  }, [toast]);
+
+  const handleCropCancel = useCallback(() => {
+    setAppState("upload");
   }, []);
 
   const handleGenerate = useCallback(async () => {
@@ -489,13 +510,25 @@ const Index = () => {
 
           {selectedImage && (
             <div className="max-w-2xl mx-auto mt-8 space-y-6">
+              {/* Crop button */}
+              <div className="flex justify-center">
+                <Button
+                  variant="outline"
+                  onClick={handleStartCrop}
+                  className="gap-2"
+                >
+                  <Crop className="w-4 h-4" />
+                  Crop & Adjust Image
+                </Button>
+              </div>
+
               <StyleSelector
                 selectedStyles={selectedStyles}
                 onStylesChange={setSelectedStyles}
                 customPrompt={customPrompt}
                 onCustomPromptChange={setCustomPrompt}
               />
-              
+
               <div className="flex justify-center">
                 <Button
                   onClick={handleGenerate}
@@ -503,7 +536,7 @@ const Index = () => {
                   className="bg-gradient-hero text-primary-foreground hover:opacity-90 shadow-food text-lg px-12 py-6 rounded-full"
                   disabled={isGenerating}
                 >
-                  {selectedStyles.length === 0 && !customPrompt.trim() 
+                  {selectedStyles.length === 0 && !customPrompt.trim()
                     ? "Generate 3 Pro Versions"
                     : `Generate ${selectedStyles.length + (customPrompt.trim() ? 1 : 0)} Version${selectedStyles.length + (customPrompt.trim() ? 1 : 0) > 1 ? 's' : ''}`
                   }
@@ -511,6 +544,24 @@ const Index = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {appState === "cropping" && imagePreview && (
+        <div className="container mx-auto px-4 py-20">
+          <div className="text-center mb-8">
+            <h2 className="text-4xl font-bold text-foreground mb-4">
+              Crop Your Photo
+            </h2>
+            <p className="text-muted-foreground">
+              Adjust the crop area, zoom, or rotate to get the perfect frame
+            </p>
+          </div>
+          <ImageCropper
+            imageSrc={imagePreview}
+            onCropComplete={handleCropComplete}
+            onCancel={handleCropCancel}
+          />
         </div>
       )}
 

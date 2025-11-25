@@ -33,7 +33,29 @@ export default function PublicMenu() {
 
   useEffect(() => {
     loadMenu();
+    trackView();
   }, [menuId]);
+
+  // Track menu view
+  const trackView = async () => {
+    if (!menuId) return;
+
+    // Determine source from URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const source = urlParams.get('src') || 'direct'; // 'qr', 'share', 'embed', or 'direct'
+
+    try {
+      await supabase.from('menu_views').insert({
+        menu_id: menuId,
+        source: source,
+        user_agent: navigator.userAgent,
+        referrer: document.referrer || null,
+      });
+    } catch (error) {
+      // Silently fail - don't disrupt user experience for analytics
+      console.debug('View tracking failed:', error);
+    }
+  };
 
   // Update document title when menu loads
   useEffect(() => {
@@ -50,9 +72,16 @@ export default function PublicMenu() {
     };
   }, [menu]);
 
+  // Generate URL with source tracking
+  const getShareUrl = (source: string) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('src', source);
+    return url.toString();
+  };
+
   const handleCopyLink = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      await navigator.clipboard.writeText(getShareUrl('share'));
       setCopied(true);
       toast.success("Link copied to clipboard!");
       setTimeout(() => setCopied(false), 2000);
@@ -67,7 +96,7 @@ export default function PublicMenu() {
         await navigator.share({
           title: menu.name,
           text: `Check out the menu for ${menu.name}`,
-          url: window.location.href,
+          url: getShareUrl('share'),
         });
       } catch (error) {
         // User cancelled or share failed, fall back to copy
