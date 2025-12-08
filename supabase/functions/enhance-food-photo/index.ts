@@ -2,6 +2,30 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { fal } from "https://esm.sh/@fal-ai/client@1.1.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const ALLOWED_IMAGE_HOSTS = [
+  "supabase.co",
+  "supabase.com",
+  "fal.media",
+  "fal.ai",
+];
+
+function isAllowedImageUrl(urlString: string): boolean {
+  try {
+    const url = new URL(urlString);
+    return ALLOWED_IMAGE_HOSTS.some(host => url.hostname.endsWith(host));
+  } catch {
+    return false;
+  }
+}
+
+function sanitizePromptInput(input: string): string {
+  // Remove potential prompt injection patterns
+  return input
+    .replace(/[\n\r]/g, ' ')  // Remove newlines
+    .replace(/[^\w\s.,!?-]/g, '') // Only allow safe characters
+    .substring(0, 200); // Limit length
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -13,7 +37,44 @@ serve(async (req) => {
   }
 
   try {
+    // Authentication check
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Missing authorization header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      throw new Error("Supabase credentials not configured");
+    }
+
+    const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const token = authHeader.replace("Bearer ", "");
+    const { data: userData, error: authError } = await supabaseAuth.auth.getUser(token);
+
+    if (authError || !userData.user) {
+      return new Response(
+        JSON.stringify({ error: "Invalid or expired token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const authenticatedUserId = userData.user.id;
+
     const { imageUrl, userId, photoLibraryId, selectedStyles, customPrompt } = await req.json();
+
+    // Validate that userId matches authenticated user (if provided)
+    if (userId && userId !== authenticatedUserId) {
+      return new Response(
+        JSON.stringify({ error: "User ID mismatch" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     if (!imageUrl) {
       return new Response(
@@ -22,16 +83,23 @@ serve(async (req) => {
       );
     }
 
+    // Validate image URL to prevent SSRF
+    if (!isAllowedImageUrl(imageUrl)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid image URL. Only images from allowed sources are permitted." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const FAL_KEY = Deno.env.get("FAL_KEY");
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!FAL_KEY) {
       throw new Error("FAL_KEY not configured");
     }
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error("Supabase credentials not configured");
+    if (!SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("Supabase service role key not configured");
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -58,11 +126,12 @@ serve(async (req) => {
       },
     ];
 
-    // Add custom prompt variation if provided
+    // Add custom prompt variation if provided (sanitized to prevent prompt injection)
     if (customPrompt) {
+      const sanitizedPrompt = sanitizePromptInput(customPrompt);
       allVariations.push({
         name: "Custom Style",
-        prompt: `Transform this food photo into professional restaurant photography. ${customPrompt}. Make sure all plates, bowls, utensils, and surfaces are pristine and spotless. The food should look exactly the same but with professional presentation. Maintain the exact dish composition and ingredients. Professional menu photography style. 4K quality.`,
+        prompt: `Transform this food photo into professional restaurant photography. Style preference: ${sanitizedPrompt}. Make sure all plates, bowls, utensils, and surfaces are pristine and spotless. The food should look exactly the same but with professional presentation. Maintain the exact dish composition and ingredients. Professional menu photography style. 4K quality.`,
       });
     }
 
@@ -111,8 +180,8 @@ serve(async (req) => {
       const imageArrayBuffer = await imageBlob.arrayBuffer();
       const imageBuffer = new Uint8Array(imageArrayBuffer);
 
-      // Upload to Supabase Storage
-      const fileName = `${userId || 'anonymous'}/${Date.now()}-${variation.name.toLowerCase().replace(/\s+/g, '-')}.png`;
+      // Upload to Supabase Storage (use authenticated user ID for security)
+      const fileName = `${authenticatedUserId}/${Date.now()}-${variation.name.toLowerCase().replace(/\s+/g, '-')}.png`;
       console.log(`Uploading ${variation.name} to Supabase Storage: ${fileName}`);
       
       const { data: uploadData, error: uploadError } = await supabase.storage

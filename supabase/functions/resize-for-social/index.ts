@@ -6,6 +6,22 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const ALLOWED_IMAGE_HOSTS = [
+  "supabase.co",
+  "supabase.com",
+  "fal.media",
+  "fal.ai",
+];
+
+function isAllowedImageUrl(urlString: string): boolean {
+  try {
+    const url = new URL(urlString);
+    return ALLOWED_IMAGE_HOSTS.some(host => url.hostname.endsWith(host));
+  } catch {
+    return false;
+  }
+}
+
 interface PlatformDimensions {
   [key: string]: { width: number; height: number };
 }
@@ -25,6 +41,34 @@ serve(async (req) => {
   }
 
   try {
+    // Authentication check
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Missing authorization header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("Supabase credentials not configured");
+    }
+
+    const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const token = authHeader.replace("Bearer ", "");
+    const { data: userData, error: authError } = await supabaseAuth.auth.getUser(token);
+
+    if (authError || !userData.user) {
+      return new Response(
+        JSON.stringify({ error: "Invalid or expired token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { imageUrl, platforms, enhancedPhotoId } = await req.json();
 
     if (!imageUrl || !platforms || !Array.isArray(platforms)) {
@@ -34,16 +78,17 @@ serve(async (req) => {
       );
     }
 
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error("Supabase credentials not configured");
+    // Validate image URL to prevent SSRF
+    if (!isAllowedImageUrl(imageUrl)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid image URL. Only images from allowed sources are permitted." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Fetch the original image
+    // Fetch the original image (URL already validated)
     const imageResponse = await fetch(imageUrl);
     const imageBlob = await imageResponse.blob();
     

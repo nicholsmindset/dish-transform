@@ -1,9 +1,21 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+function sanitizeInput(input: string, maxLength: number = 100): string {
+  if (!input) return '';
+  return input
+    .replace(/[\n\r]/g, ' ')
+    .replace(/[<>{}[\]\\]/g, '')
+    .trim()
+    .substring(0, maxLength);
+}
+
+const VALID_TONES = ['casual', 'upscale', 'romantic', 'family'] as const;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -11,7 +23,47 @@ serve(async (req) => {
   }
 
   try {
+    // Authentication check
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Missing authorization header" }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      throw new Error("Supabase credentials not configured");
+    }
+
+    const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const token = authHeader.replace("Bearer ", "");
+    const { data: userData, error: authError } = await supabaseAuth.auth.getUser(token);
+
+    if (authError || !userData.user) {
+      return new Response(
+        JSON.stringify({ error: "Invalid or expired token" }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { dishName, tone, ingredients } = await req.json();
+
+    // Validate and sanitize inputs
+    const safeDishName = sanitizeInput(dishName, 100);
+    const safeIngredients = sanitizeInput(ingredients, 300);
+    const safeTone = VALID_TONES.includes(tone) ? tone : 'casual';
+
+    if (!safeDishName) {
+      return new Response(
+        JSON.stringify({ error: "Dish name is required" }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 
     if (!LOVABLE_API_KEY) {
@@ -27,9 +79,9 @@ serve(async (req) => {
       family: "Write in a welcoming, inclusive tone. Emphasize comfort and satisfaction."
     };
 
-    const userPrompt = `Generate a compelling menu description for "${dishName}".
-${ingredients ? `Ingredients: ${ingredients}` : ''}
-Tone: ${toneInstructions[tone as keyof typeof toneInstructions] || toneInstructions.casual}
+    const userPrompt = `Generate a compelling menu description for "${safeDishName}".
+${safeIngredients ? `Ingredients: ${safeIngredients}` : ''}
+Tone: ${toneInstructions[safeTone as keyof typeof toneInstructions]}
 
 Requirements:
 - Keep it under 40 words

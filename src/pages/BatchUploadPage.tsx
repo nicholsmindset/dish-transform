@@ -12,20 +12,22 @@ export default function BatchUploadPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    checkUser();
-  }, []);
+    // Check initial session
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
 
-  const checkUser = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
-      navigate("/auth");
-      return;
-    }
+      if (!session) {
+        navigate("/auth");
+        return;
+      }
 
-    setUser(session.user);
-    setLoading(false);
+      setUser(session.user);
+      setLoading(false);
+    };
 
+    checkSession();
+
+    // Set up auth state listener (cleanup is handled properly in useEffect return)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!session) {
         navigate("/auth");
@@ -35,7 +37,7 @@ export default function BatchUploadPage() {
     });
 
     return () => subscription.unsubscribe();
-  };
+  }, [navigate]);
 
   if (loading || !user) {
     return (
