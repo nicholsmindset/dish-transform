@@ -12,6 +12,28 @@ const supabase = createClient(
 );
 
 const WEBHOOK_SECRET = Deno.env.get("STRIPE_WEBHOOK_SECRET") || "";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+
+// Helper function to send email notifications
+async function sendEmail(to: string, template: string, data: Record<string, any>) {
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+      },
+      body: JSON.stringify({ to, template, data }),
+    });
+    if (!response.ok) {
+      console.error("Failed to send email:", await response.text());
+    } else {
+      console.log(`Email sent: ${template} to ${to}`);
+    }
+  } catch (error) {
+    console.error("Email error:", error);
+  }
+}
 
 // Subscription tier mapping
 const SUBSCRIPTION_TIERS: Record<string, {
@@ -167,6 +189,16 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
       console.log(`Added ${tokensToAdd} tokens to user ${userId}`);
     }
+
+    // Send purchase confirmation email
+    if (session.customer_email) {
+      await sendEmail(session.customer_email, "purchase_confirmation", {
+        packageName: session.metadata?.package_name || "Image Pack",
+        imagesCount: imagesCount || tokensToAdd,
+        amount: ((session.amount_total || 0) / 100).toFixed(2),
+        dashboardUrl: "https://dishtransform.com/dashboard",
+      });
+    }
   }
 }
 
@@ -229,6 +261,18 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
   }
 
   console.log(`Updated subscription for user ${userId}: ${tierConfig.tier} plan`);
+
+  // Send subscription confirmation email
+  const customer = await stripe.customers.retrieve(customerId);
+  if (customer && !customer.deleted && customer.email) {
+    await sendEmail(customer.email, "subscription_started", {
+      planName: `${tierConfig.tier.charAt(0).toUpperCase() + tierConfig.tier.slice(1)} Plan`,
+      imagesPerMonth: tierConfig.images_per_month,
+      socialPosts: tierConfig.social_posts,
+      priority: tierConfig.priority,
+      dashboardUrl: "https://dishtransform.com/dashboard",
+    });
+  }
 }
 
 async function handleSubscriptionCancelled(subscription: Stripe.Subscription) {
