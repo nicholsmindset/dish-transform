@@ -5,6 +5,16 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "X-XSS-Protection": "1; mode=block",
+};
+
+// Rate limiting configuration
+const RATE_LIMIT = {
+  maxRequests: 10, // Max requests per window
+  windowMinutes: 1, // Window size in minutes
 };
 
 serve(async (req) => {
@@ -12,7 +22,56 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return new Response(
+      JSON.stringify({ error: "Server configuration error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
   try {
+    // Get client IP for rate limiting
+    const clientIP = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+                     req.headers.get("x-real-ip") ||
+                     "unknown";
+
+    // Check rate limit
+    const { data: rateLimitOk, error: rateLimitError } = await supabase.rpc(
+      "check_rate_limit",
+      {
+        p_identifier: clientIP,
+        p_endpoint: "enhance-food-photo",
+        p_max_requests: RATE_LIMIT.maxRequests,
+        p_window_minutes: RATE_LIMIT.windowMinutes,
+      }
+    );
+
+    if (rateLimitError) {
+      console.error("Rate limit check error:", rateLimitError);
+    }
+
+    if (rateLimitOk === false) {
+      return new Response(
+        JSON.stringify({
+          error: "Rate limit exceeded. Please wait before making more requests.",
+          retryAfter: RATE_LIMIT.windowMinutes * 60
+        }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "Retry-After": String(RATE_LIMIT.windowMinutes * 60)
+          }
+        }
+      );
+    }
+
     const { imageUrl, userId, photoLibraryId, selectedStyles, customPrompt } = await req.json();
 
     if (!imageUrl) {
@@ -23,26 +82,19 @@ serve(async (req) => {
     }
 
     const FAL_KEY = Deno.env.get("FAL_KEY");
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!FAL_KEY) {
       throw new Error("FAL_KEY not configured");
     }
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error("Supabase credentials not configured");
-    }
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
     fal.config({
       credentials: FAL_KEY,
     });
 
-    console.log("Enhancing food photo with 3 professional variations");
+    console.log("Enhancing food photo with Gemini Banana Pro - 3 professional variations");
 
     // 3 variations with different settings and presentations
+    // Using Gemini Banana Pro model for best quality
     const allVariations = [
       {
         name: "Clean White Background",
@@ -74,9 +126,11 @@ serve(async (req) => {
     const results = [];
 
     for (const variation of variations) {
-      console.log(`Generating ${variation.name}...`);
+      console.log(`Generating ${variation.name} with Gemini Banana Pro...`);
 
-      const result = await fal.subscribe("fal-ai/nano-banana-pro/edit", {
+      // Using fal-ai/gemini-banana-pro for best quality image editing
+      // This model provides superior food photography enhancement
+      const result = await fal.subscribe("fal-ai/gemini-banana-pro/edit", {
         input: {
           prompt: variation.prompt,
           num_images: 1,
@@ -85,7 +139,8 @@ serve(async (req) => {
           image_urls: [imageUrl],
           resolution: "2K",
           guidance_scale: 7.5,
-          num_inference_steps: 30,
+          num_inference_steps: 35, // Slightly more steps for better quality
+          seed: Math.floor(Math.random() * 1000000), // Random seed for variety
         },
         logs: true,
         onQueueUpdate: (update) => {
@@ -114,7 +169,7 @@ serve(async (req) => {
       // Upload to Supabase Storage
       const fileName = `${userId || 'anonymous'}/${Date.now()}-${variation.name.toLowerCase().replace(/\s+/g, '-')}.png`;
       console.log(`Uploading ${variation.name} to Supabase Storage: ${fileName}`);
-      
+
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('enhanced-photos')
         .upload(fileName, imageBuffer, {
@@ -164,11 +219,12 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         photos: results,
         metadata: {
           totalGenerated: results.length,
-          generatedAt: new Date().toISOString()
+          generatedAt: new Date().toISOString(),
+          model: "gemini-banana-pro"
         }
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

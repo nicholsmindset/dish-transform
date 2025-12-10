@@ -1,5 +1,9 @@
 project_id = "tnxotlaiubnhgtelhsca"
 
+[api]
+# Enable additional security headers
+extra_search_path = ["public", "extensions"]
+
 [functions.enhance-food-photo]
 verify_jwt = false
 
@@ -16,4 +20,10 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.check-tokens]
+verify_jwt = true
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.send-email]
 verify_jwt = true
