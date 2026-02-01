@@ -3,8 +3,10 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const FROM_EMAIL = Deno.env.get("FROM_EMAIL") || "Dish Transform <noreply@dishtransform.com>";
 
+const ALLOWED_ORIGIN = Deno.env.get("ALLOWED_ORIGIN") || "*";
+
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
@@ -14,6 +16,26 @@ interface EmailRequest {
   subject: string;
   template: string;
   data: Record<string, any>;
+}
+
+// Escape HTML to prevent XSS in email templates
+function escapeHtml(str: string): string {
+  if (typeof str !== 'string') return String(str ?? '');
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
+// Sanitize template data — escape all string values
+function sanitizeData(data: Record<string, any>): Record<string, any> {
+  const sanitized: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data)) {
+    sanitized[key] = typeof value === 'string' ? escapeHtml(value) : value;
+  }
+  return sanitized;
 }
 
 // Email templates
@@ -228,7 +250,7 @@ serve(async (req) => {
       );
     }
 
-    const { html, text } = templateFn(data || {});
+    const { html, text } = templateFn(sanitizeData(data || {}));
 
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",

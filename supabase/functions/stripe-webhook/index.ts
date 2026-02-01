@@ -81,12 +81,24 @@ serve(async (req) => {
       });
     }
 
-    // Record the event
-    await supabase.from("webhook_events").insert({
+    // Record the event (unique constraint handles race conditions)
+    const { error: insertError } = await supabase.from("webhook_events").insert({
       stripe_event_id: event.id,
       event_type: event.type,
       payload: event.data.object,
     });
+
+    if (insertError) {
+      // If unique constraint violation, this is a duplicate
+      if (insertError.code === '23505') {
+        console.log(`Event ${event.id} already being processed (race condition)`);
+        return new Response(JSON.stringify({ received: true, duplicate: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      console.error("Failed to record webhook event:", insertError);
+    }
 
     console.log(`Processing webhook event: ${event.type}`);
 

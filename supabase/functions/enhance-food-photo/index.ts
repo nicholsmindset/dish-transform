@@ -2,8 +2,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { fal } from "https://esm.sh/@fal-ai/client@1.1.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const ALLOWED_ORIGIN = Deno.env.get("ALLOWED_ORIGIN") || "*";
+
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "X-Content-Type-Options": "nosniff",
@@ -53,6 +55,11 @@ serve(async (req) => {
 
     if (rateLimitError) {
       console.error("Rate limit check error:", rateLimitError);
+      // Fail closed: deny request if rate limit check fails
+      return new Response(
+        JSON.stringify({ error: "Service temporarily unavailable. Please try again." }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     if (rateLimitOk === false) {

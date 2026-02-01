@@ -2,8 +2,10 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
+const ALLOWED_ORIGIN = Deno.env.get("ALLOWED_ORIGIN") || "*";
+
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "X-Content-Type-Options": "nosniff",
@@ -62,12 +64,15 @@ serve(async (req) => {
       throw new Error("Price ID required");
     }
 
-    const authHeader = req.headers.get("Authorization")!;
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      throw new Error("No authorization header");
+    }
     const token = authHeader.replace("Bearer ", "");
-    const { data } = await supabaseClient.auth.getUser(token);
+    const { data, error: authError } = await supabaseClient.auth.getUser(token);
     const user = data.user;
 
-    if (!user?.email) {
+    if (authError || !user?.email) {
       throw new Error("User not authenticated");
     }
 
@@ -82,6 +87,11 @@ serve(async (req) => {
       customerId = customers.data[0].id;
       console.log(`Found existing customer: ${customerId}`);
     }
+
+    // Use ALLOWED_ORIGIN for redirect URLs to prevent open redirect attacks
+    const siteUrl = ALLOWED_ORIGIN !== "*"
+      ? ALLOWED_ORIGIN
+      : (Deno.env.get("SITE_URL") || "https://dishtransform.com");
 
     let session;
 
@@ -100,8 +110,8 @@ serve(async (req) => {
           },
         ],
         mode: "subscription",
-        success_url: `${req.headers.get("origin")}/payment-success?session_id={CHECKOUT_SESSION_ID}&type=subscription`,
-        cancel_url: `${req.headers.get("origin")}/pricing`,
+        success_url: `${siteUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}&type=subscription`,
+        cancel_url: `${siteUrl}/pricing`,
         metadata: {
           user_id: user.id,
           purchase_type: "subscription",
@@ -135,8 +145,8 @@ serve(async (req) => {
           },
         ],
         mode: "payment",
-        success_url: `${req.headers.get("origin")}/payment-success?session_id={CHECKOUT_SESSION_ID}&type=one_time`,
-        cancel_url: `${req.headers.get("origin")}/pricing`,
+        success_url: `${siteUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}&type=one_time`,
+        cancel_url: `${siteUrl}/pricing`,
         metadata: {
           user_id: user.id,
           purchase_type: "one_time",
@@ -161,8 +171,8 @@ serve(async (req) => {
           },
         ],
         mode: "payment",
-        success_url: `${req.headers.get("origin")}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${req.headers.get("origin")}/pricing`,
+        success_url: `${siteUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${siteUrl}/pricing`,
         metadata: {
           user_id: user.id,
           tokens: packageInfo.tokens.toString(),

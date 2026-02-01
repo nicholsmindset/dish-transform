@@ -274,10 +274,30 @@ CREATE POLICY "Service role can manage webhook events"
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_status ON subscriptions(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_active ON subscriptions(user_id, status, current_period_end)
+  WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_customer ON subscriptions(stripe_customer_id);
 CREATE INDEX IF NOT EXISTS idx_one_time_purchases_user_id ON one_time_purchases(user_id);
+CREATE INDEX IF NOT EXISTS idx_one_time_purchases_user_remaining ON one_time_purchases(user_id, images_remaining)
+  WHERE images_remaining > 0;
 CREATE INDEX IF NOT EXISTS idx_products_pricing_type ON products(pricing_type);
 CREATE INDEX IF NOT EXISTS idx_products_is_active ON products(is_active);
+CREATE INDEX IF NOT EXISTS idx_products_active_type ON products(pricing_type, is_active)
+  WHERE is_active = true;
 CREATE INDEX IF NOT EXISTS idx_webhook_events_stripe_id ON webhook_events(stripe_event_id);
+
+-- Atomic token update function (prevents race conditions)
+CREATE OR REPLACE FUNCTION add_user_tokens(p_user_id UUID, p_tokens INTEGER)
+RETURNS void AS $$
+BEGIN
+  INSERT INTO user_tokens (user_id, tokens)
+  VALUES (p_user_id, p_tokens)
+  ON CONFLICT (user_id)
+  DO UPDATE SET tokens = user_tokens.tokens + p_tokens,
+               updated_at = NOW();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Grant permissions
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
@@ -286,3 +306,4 @@ GRANT SELECT ON subscriptions TO authenticated;
 GRANT SELECT ON one_time_purchases TO authenticated;
 GRANT EXECUTE ON FUNCTION check_subscription_usage TO authenticated;
 GRANT EXECUTE ON FUNCTION check_rate_limit TO authenticated;
+GRANT EXECUTE ON FUNCTION add_user_tokens TO service_role;

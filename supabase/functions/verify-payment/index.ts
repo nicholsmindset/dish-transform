@@ -2,8 +2,10 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
+const ALLOWED_ORIGIN = Deno.env.get("ALLOWED_ORIGIN") || "*";
+
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
@@ -53,33 +55,15 @@ serve(async (req) => {
 
     console.log(`Payment verified for user ${userId}, adding ${tokensToAdd} tokens`);
 
-    // Check if purchase already recorded
-    const { data: existingPurchase } = await supabaseClient
-      .from('token_purchases')
-      .select('id')
-      .eq('stripe_checkout_session_id', sessionId)
-      .maybeSingle();
-
-    if (existingPurchase) {
-      console.log(`Purchase already recorded: ${existingPurchase.id}`);
-      return new Response(JSON.stringify({ 
-        success: true, 
-        message: "Tokens already added",
-        alreadyProcessed: true 
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
-    }
-
     // Get line item details
     const lineItems = await stripe.checkout.sessions.listLineItems(sessionId);
     const priceId = lineItems.data[0]?.price?.id;
 
-    // Record purchase
-    const { error: purchaseError } = await supabaseClient
+    // Record purchase atomically using upsert with unique constraint
+    // This prevents double-crediting from concurrent requests
+    const { data: purchaseResult, error: purchaseError } = await supabaseClient
       .from('token_purchases')
-      .insert({
+      .upsert({
         user_id: userId,
         stripe_checkout_session_id: sessionId,
         stripe_payment_intent_id: session.payment_intent as string,
@@ -89,33 +73,56 @@ serve(async (req) => {
         amount_paid: session.amount_total || 0,
         currency: session.currency || 'usd',
         status: 'completed',
+      }, { onConflict: 'stripe_checkout_session_id', ignoreDuplicates: true })
+      .select('id')
+      .single();
+
+    // If no row returned, it was a duplicate — already processed
+    if (!purchaseResult) {
+      console.log(`Purchase already recorded for session: ${sessionId}`);
+      return new Response(JSON.stringify({
+        success: true,
+        message: "Tokens already added",
+        alreadyProcessed: true
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
       });
+    }
 
     if (purchaseError) {
       console.error("Failed to record purchase:", purchaseError);
       throw new Error("Failed to record purchase");
     }
 
-    // Update or create token balance
-    const { data: existingTokens } = await supabaseClient
-      .from('user_tokens')
-      .select('tokens')
-      .eq('user_id', userId)
-      .maybeSingle();
+    // Upsert token balance atomically
+    // First try to insert, then update on conflict
+    const { error: tokenError } = await supabaseClient.rpc('add_user_tokens', {
+      p_user_id: userId,
+      p_tokens: tokensToAdd,
+    });
 
-    if (existingTokens) {
-      const { error: updateError } = await supabaseClient
+    // Fallback if RPC doesn't exist: use upsert pattern
+    if (tokenError) {
+      console.warn("RPC fallback, using upsert:", tokenError.message);
+      const { data: existingTokens } = await supabaseClient
         .from('user_tokens')
-        .update({ tokens: existingTokens.tokens + tokensToAdd })
-        .eq('user_id', userId);
-      
-      if (updateError) throw new Error("Failed to update token balance");
-    } else {
-      const { error: insertError } = await supabaseClient
-        .from('user_tokens')
-        .insert({ user_id: userId, tokens: tokensToAdd });
-      
-      if (insertError) throw new Error("Failed to create token balance");
+        .select('tokens')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (existingTokens) {
+        const { error: updateError } = await supabaseClient
+          .from('user_tokens')
+          .update({ tokens: existingTokens.tokens + tokensToAdd })
+          .eq('user_id', userId);
+        if (updateError) throw new Error("Failed to update token balance");
+      } else {
+        const { error: insertError } = await supabaseClient
+          .from('user_tokens')
+          .insert({ user_id: userId, tokens: tokensToAdd });
+        if (insertError) throw new Error("Failed to create token balance");
+      }
     }
 
     console.log(`Successfully added ${tokensToAdd} tokens to user ${userId}`);

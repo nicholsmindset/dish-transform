@@ -18,8 +18,8 @@ import {
   Clock,
   RefreshCw,
   Edit3,
-  Share2,
-  Crown
+  Crown,
+  Loader2
 } from "lucide-react";
 
 // A La Carte packages (SGD pricing)
@@ -163,6 +163,7 @@ const Pricing = () => {
   const { toast } = useToast();
   const [user, setUser] = useState<any>(null);
   const [tokenBalance, setTokenBalance] = useState<number>(0);
+  const [loadingTokens, setLoadingTokens] = useState<boolean>(false);
   const [loadingPackage, setLoadingPackage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("subscriptions");
 
@@ -185,12 +186,20 @@ const Pricing = () => {
   }, []);
 
   const fetchTokenBalance = async () => {
+    setLoadingTokens(true);
     try {
       const { data, error } = await supabase.functions.invoke('check-tokens');
       if (error) throw error;
       setTokenBalance(data.tokens || 0);
     } catch (error) {
       console.error('Error fetching tokens:', error);
+      toast({
+        title: "Could not load balance",
+        description: "Your credit balance could not be loaded. Please refresh.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingTokens(false);
     }
   };
 
@@ -241,8 +250,12 @@ const Pricing = () => {
           </h1>
           <div className="flex items-center gap-4">
             {user && (
-              <div className="bg-gradient-hero text-primary-foreground px-4 py-2 rounded-full font-semibold">
-                {tokenBalance} credits
+              <div className="bg-gradient-hero text-primary-foreground px-4 py-2 rounded-full font-semibold flex items-center gap-2">
+                {loadingTokens ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  tokenBalance
+                )} credits
               </div>
             )}
             <Button variant="ghost" onClick={() => navigate("/dashboard")}>
