@@ -331,37 +331,66 @@ const Index = () => {
   }, [enhancedPhotos.length]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-neutral-950">
       {/* Header */}
-      <header className="border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
+      <header className={`${appState === "hero" ? "absolute" : "sticky"} top-0 left-0 right-0 z-50 ${appState !== "hero" ? "bg-neutral-950 border-b border-white/10" : "bg-transparent"}`}>
+        <div className="container mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
-            <h1 
+            <h1
               onClick={() => setAppState("hero")}
-              className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent cursor-pointer"
+              className="text-xl font-light text-white tracking-[0.2em] uppercase cursor-pointer hover:text-amber-400 transition-colors"
             >
-              MenuVisuals
+              Dish Transform
             </h1>
-            <div className="flex items-center gap-4">
+            <nav className="hidden md:flex items-center gap-10">
+              <button
+                onClick={() => navigate("/pricing")}
+                className="text-white/70 hover:text-white text-sm tracking-wide transition-colors"
+              >
+                Pricing
+              </button>
+              <button
+                onClick={() => navigate("/dashboard")}
+                className="text-white/70 hover:text-white text-sm tracking-wide transition-colors"
+              >
+                Gallery
+              </button>
+            </nav>
+            <div className="flex items-center gap-6">
               {user ? (
                 <>
-                  <Button variant="ghost" onClick={() => navigate("/dashboard")}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => navigate("/dashboard")}
+                    className="text-white/70 hover:text-white hover:bg-transparent text-sm tracking-wide"
+                  >
                     My Library
                   </Button>
-                  <Button variant="ghost" onClick={async () => {
-                    await supabase.auth.signOut();
-                    toast({ title: "Signed out successfully" });
-                  }}>
+                  <Button
+                    variant="ghost"
+                    onClick={async () => {
+                      await supabase.auth.signOut();
+                      toast({ title: "Signed out successfully" });
+                    }}
+                    className="text-white/70 hover:text-white hover:bg-transparent text-sm tracking-wide"
+                  >
                     <LogOut className="w-4 h-4 mr-2" />
-                    Logout
+                    Sign Out
                   </Button>
                 </>
               ) : (
                 <>
-                  <Button variant="ghost" onClick={() => navigate("/auth")}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => navigate("/auth")}
+                    className="text-white/70 hover:text-white hover:bg-transparent text-sm tracking-wide"
+                  >
                     Sign In
                   </Button>
-                  <Button onClick={() => navigate("/auth")}>
+                  <Button
+                    onClick={() => navigate("/auth")}
+                    className="bg-transparent border border-amber-500 text-amber-500 hover:bg-amber-500 hover:text-black rounded-none px-6 text-sm tracking-wide transition-all"
+                  >
                     Get Started
                   </Button>
                 </>
@@ -374,13 +403,16 @@ const Index = () => {
       {appState === "hero" && <Hero onGetStarted={handleGetStarted} />}
 
       {appState === "upload" && (
-        <div className="container mx-auto px-4 py-20">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
-              Upload Your Food Photo
+        <div className="container mx-auto px-6 py-24">
+          <div className="text-center mb-16">
+            <p className="text-amber-500 uppercase tracking-[0.3em] text-sm font-light mb-6">
+              Begin Your Transformation
+            </p>
+            <h2 className="text-4xl md:text-6xl font-light text-white mb-6 tracking-tight">
+              Upload Your <span className="font-serif italic text-amber-100">Masterpiece</span>
             </h2>
-            <p className="text-xl text-muted-foreground">
-              We'll transform it into 3 professional versions
+            <p className="text-xl text-white/60 font-light max-w-xl mx-auto">
+              We'll craft three distinct visual interpretations of your culinary creation
             </p>
           </div>
 
@@ -392,25 +424,24 @@ const Index = () => {
           />
 
           {selectedImage && (
-            <div className="max-w-2xl mx-auto mt-8 space-y-6">
+            <div className="max-w-2xl mx-auto mt-12 space-y-8">
               <StyleSelector
                 selectedStyles={selectedStyles}
                 onStylesChange={setSelectedStyles}
                 customPrompt={customPrompt}
                 onCustomPromptChange={setCustomPrompt}
               />
-              
+
               <div className="flex justify-center">
                 <Button
                   onClick={handleGenerate}
                   size="lg"
-                  className="bg-gradient-hero text-primary-foreground hover:opacity-90 shadow-food text-lg px-12 py-6 rounded-full"
+                  className="bg-amber-500 hover:bg-amber-400 text-black font-medium text-base px-12 py-7 rounded-none tracking-wide transition-all duration-300"
                   disabled={isGenerating}
                 >
-                  {selectedStyles.length === 0 && !customPrompt.trim() 
-                    ? "Generate 3 Pro Versions"
-                    : `Generate ${selectedStyles.length + (customPrompt.trim() ? 1 : 0)} Version${selectedStyles.length + (customPrompt.trim() ? 1 : 0) > 1 ? 's' : ''}`
-                  }
+                  {selectedStyles.length === 0 && !customPrompt.trim()
+                    ? "Create 3 Variations"
+                    : `Create ${selectedStyles.length + (customPrompt.trim() ? 1 : 0)} Variation${selectedStyles.length + (customPrompt.trim() ? 1 : 0) > 1 ? "s" : ""}`}
                 </Button>
               </div>
             </div>
@@ -461,30 +492,64 @@ const Index = () => {
       )}
 
       {/* Footer */}
-      <footer className="bg-card/50 backdrop-blur-sm border-t border-border py-12 mt-20">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto text-center">
-            <h3 className="text-2xl font-bold text-foreground mb-6">Pricing</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-card rounded-xl p-6 border border-border shadow-warm">
-                <h4 className="font-semibold text-lg mb-2">Small Restaurant</h4>
-                <p className="text-3xl font-bold text-primary mb-2">$79/mo</p>
-                <p className="text-muted-foreground text-sm">30 dishes (90 photos)</p>
+      <footer className="bg-black border-t border-white/10 py-20 mt-20">
+        <div className="container mx-auto px-6">
+          <div className="max-w-6xl mx-auto">
+            {/* Top Section */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+              {/* Brand */}
+              <div className="md:col-span-2">
+                <h3 className="text-xl font-light text-white tracking-[0.2em] uppercase mb-6">
+                  Dish Transform
+                </h3>
+                <p className="text-white/50 font-light leading-relaxed max-w-md">
+                  Elevating culinary photography for the world's most distinguished restaurants
+                  and passionate food artisans.
+                </p>
               </div>
-              <div className="bg-gradient-hero rounded-xl p-6 border-2 border-primary shadow-food">
-                <h4 className="font-semibold text-lg mb-2 text-primary-foreground">Multi-Location</h4>
-                <p className="text-3xl font-bold text-primary-foreground mb-2">$199/mo</p>
-                <p className="text-primary-foreground/80 text-sm">100 dishes (300 photos)</p>
+
+              {/* Quick Links */}
+              <div>
+                <h4 className="text-white/40 uppercase tracking-widest text-sm mb-6">Navigate</h4>
+                <ul className="space-y-3">
+                  <li>
+                    <button onClick={() => navigate("/pricing")} className="text-white/60 hover:text-amber-400 text-sm transition-colors">
+                      Pricing
+                    </button>
+                  </li>
+                  <li>
+                    <button onClick={() => navigate("/dashboard")} className="text-white/60 hover:text-amber-400 text-sm transition-colors">
+                      Gallery
+                    </button>
+                  </li>
+                  <li>
+                    <button onClick={() => navigate("/auth")} className="text-white/60 hover:text-amber-400 text-sm transition-colors">
+                      Sign In
+                    </button>
+                  </li>
+                </ul>
               </div>
-              <div className="bg-card rounded-xl p-6 border border-border shadow-warm">
-                <h4 className="font-semibold text-lg mb-2">Enterprise Chain</h4>
-                <p className="text-3xl font-bold text-accent mb-2">$499/mo</p>
-                <p className="text-muted-foreground text-sm">Unlimited + API access</p>
+
+              {/* Contact */}
+              <div>
+                <h4 className="text-white/40 uppercase tracking-widest text-sm mb-6">Connect</h4>
+                <ul className="space-y-3">
+                  <li className="text-white/60 text-sm">hello@dishtransform.com</li>
+                  <li className="text-white/60 text-sm">Singapore</li>
+                </ul>
               </div>
             </div>
-            <p className="text-muted-foreground">
-              Built with Lovable + fal.ai
-            </p>
+
+            {/* Bottom Section */}
+            <div className="border-t border-white/10 pt-10 flex flex-col md:flex-row justify-between items-center gap-4">
+              <p className="text-white/30 text-sm">
+                &copy; {new Date().getFullYear()} Dish Transform. All rights reserved.
+              </p>
+              <div className="flex items-center gap-8">
+                <span className="text-white/30 text-sm">Privacy</span>
+                <span className="text-white/30 text-sm">Terms</span>
+              </div>
+            </div>
           </div>
         </div>
       </footer>
