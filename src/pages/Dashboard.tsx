@@ -30,12 +30,51 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
+    // TEMP: Skip auth for preview - remove this block for production
+    const PREVIEW_MODE = true;
+    if (PREVIEW_MODE) {
+      setLoading(false);
+      // Mock data for preview
+      setPhotos([
+        {
+          id: "1",
+          original_image_url: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400",
+          dish_name: "Grilled Salmon",
+          created_at: new Date().toISOString(),
+          enhanced_photos: [
+            { id: "1a", style_name: "Clean White", image_url: "" },
+            { id: "1b", style_name: "Rustic", image_url: "" },
+            { id: "1c", style_name: "Dark Moody", image_url: "" },
+          ],
+        },
+        {
+          id: "2",
+          original_image_url: "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400",
+          dish_name: "Margherita Pizza",
+          created_at: new Date().toISOString(),
+          enhanced_photos: [
+            { id: "2a", style_name: "Clean White", image_url: "" },
+            { id: "2b", style_name: "Rustic", image_url: "" },
+          ],
+        },
+        {
+          id: "3",
+          original_image_url: "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=400",
+          dish_name: "Pancakes with Berries",
+          created_at: new Date().toISOString(),
+          enhanced_photos: [],
+        },
+      ]);
+      return;
+    }
+    // END TEMP
+
     checkUser();
   }, []);
 
   const checkUser = async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    
+
     if (!session) {
       navigate("/auth");
       return;
